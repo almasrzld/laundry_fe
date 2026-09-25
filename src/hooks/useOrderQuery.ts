@@ -99,6 +99,7 @@ export function useUpdateOrderMutation() {
         courier_phone?: string;
         notes?: string;
         status?: string;
+        order_statuses_id?: string | number;
       };
     }) => {
       return await apiClient.put(`/orders/${orderId}`, orderData);
