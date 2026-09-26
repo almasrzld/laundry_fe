@@ -27,7 +27,13 @@ import { cn } from "@/lib/utils";
 
 export const LoginView: React.FC = () => {
   const router = useRouter();
-  const { setRole, login } = useAuthStore();
+  const { setRole, login, isAuthenticated, isHydrated, token } = useAuthStore();
+
+  React.useEffect(() => {
+    if (isHydrated && isAuthenticated && token) {
+      window.location.href = "/dashboard";
+    }
+  }, [isHydrated, isAuthenticated, token]);
   const loginMutation = useLoginMutation();
   const [showPassword, setShowPassword] = React.useState(false);
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = React.useState(false);
@@ -209,7 +215,7 @@ export const LoginView: React.FC = () => {
       setAttemptInfo(null);
       setLockoutSecondsLeft(0);
       toast.success(`Selamat datang, ${userName}! Login berhasil.`);
-      router.push("/dashboard");
+      window.location.href = "/dashboard";
     } catch (err: any) {
       refreshCaptcha();
       const errPayload =

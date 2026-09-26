@@ -6,7 +6,6 @@ import Link from "next/link";
 import { toast } from "sonner";
 import {
   ArrowLeft,
-  Receipt,
   Truck,
   Calendar,
   Clock,
@@ -14,16 +13,31 @@ import {
   Save,
   Loader2,
   XCircle,
+  User as UserIcon,
+  Phone,
+  Info,
+  Trash2,
+  UserCheck,
 } from "lucide-react";
-import { formatRupiah, formatDate, cn } from "@/lib/utils";
+import { formatRupiah, formatDate, cn, stripCountryCode } from "@/lib/utils";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog, ConfirmVariant } from "@/components/ui/confirm-dialog";
 import {
   useOrderByIdQuery,
-  useUpdateOrderStatusMutation,
+  useUpdateOrderMutation,
 } from "@/hooks/useOrderQuery";
 import { useOrderStatusesQuery } from "@/hooks/useMasterQuery";
+import { useActiveUsersQuery } from "@/hooks/useUserManagementQuery";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+} from "@/components/ui/select";
 
 interface OrderFormSubmitProps {
   orderId?: string;
@@ -42,7 +56,9 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
 
   const { data: order, isLoading, error } = useOrderByIdQuery(effectiveOrderId);
   const { data: masterStatuses = [] } = useOrderStatusesQuery();
-  const updateStatusMutation = useUpdateOrderStatusMutation();
+  const { data: activeUsers = [], isLoading: isLoadingUsers } =
+    useActiveUsersQuery();
+  const updateOrderMutation = useUpdateOrderMutation();
 
   // Active master statuses sorted by step_order ASC
   const activeStatuses = useMemo(() => {
@@ -53,8 +69,28 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
       );
   }, [masterStatuses]);
 
+  // Registered couriers (only users with courier role)
+  const registeredCouriers = useMemo(() => {
+    return activeUsers.filter((u) => {
+      const roleCode = (u.role_code || "").toLowerCase();
+      const roleName = (u.role_name || "").toLowerCase();
+      return (
+        roleCode === "kurir" ||
+        roleCode === "courier" ||
+        roleCode.includes("kurir") ||
+        roleCode.includes("courier") ||
+        roleName.includes("kurir") ||
+        roleName.includes("courier")
+      );
+    });
+  }, [activeUsers]);
+
   const [selectedStatusId, setSelectedStatusId] = useState<string>("");
   const [selectedStatusName, setSelectedStatusName] = useState<string>("");
+  const [courierName, setCourierName] = useState<string>("");
+  const [courierPhone, setCourierPhone] = useState<string>("");
+  const [selectedCourierUserId, setSelectedCourierUserId] =
+    useState<string>("");
 
   useEffect(() => {
     if (order) {
@@ -62,8 +98,48 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
         setSelectedStatusId(String(order.status_id || order.order_statuses_id));
       }
       setSelectedStatusName(order.status || "");
+      const orderCourierName = (order.courier_name || "").trim();
+      const orderCourierPhone = (order.courier_phone || "").trim();
+      setCourierName(orderCourierName);
+      setCourierPhone(orderCourierPhone);
+
+      if (orderCourierName || orderCourierPhone) {
+        const orderPhoneClean = stripCountryCode(orderCourierPhone);
+        const matchedUser = activeUsers.find((u) => {
+          const nameMatches =
+            orderCourierName &&
+            u.name.trim().toLowerCase() === orderCourierName.toLowerCase();
+          const phoneMatches =
+            orderPhoneClean &&
+            stripCountryCode(u.phone || "") === orderPhoneClean;
+          return nameMatches || phoneMatches;
+        });
+        setSelectedCourierUserId(matchedUser ? String(matchedUser.id) : "");
+      } else {
+        setSelectedCourierUserId("");
+      }
     }
-  }, [order]);
+  }, [order, activeUsers]);
+
+  const handleCourierUserSelect = (userId: string) => {
+    setSelectedCourierUserId(userId);
+    if (!userId) {
+      setCourierName("");
+      setCourierPhone("");
+      return;
+    }
+    const user = activeUsers.find((u) => String(u.id) === String(userId));
+    if (user) {
+      setCourierName(user.name);
+      setCourierPhone(user.phone || "");
+    }
+  };
+
+  const handleClearCourier = () => {
+    setSelectedCourierUserId("");
+    setCourierName("");
+    setCourierPhone("");
+  };
 
   // Find matched status object from master data
   const currentMatchedStatus = useMemo(() => {
@@ -77,6 +153,61 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
       ) || null
     );
   }, [order, masterStatuses]);
+
+  // Currently active or selected status object
+  const selectedStatusObj = useMemo(() => {
+    if (!selectedStatusId && !selectedStatusName) return currentMatchedStatus;
+    return (
+      masterStatuses.find(
+        (s) =>
+          String(s.id) === String(selectedStatusId) ||
+          s.name.toLowerCase() === selectedStatusName.toLowerCase() ||
+          s.code.toLowerCase() === selectedStatusName.toLowerCase(),
+      ) || currentMatchedStatus
+    );
+  }, [
+    selectedStatusId,
+    selectedStatusName,
+    masterStatuses,
+    currentMatchedStatus,
+  ]);
+
+  // Form kurir disable jika status melewati penjemputan (step > 2 atau status pencucian / proses berikutnya)
+  const isCourierFormDisabled = useMemo(() => {
+    const currentStep =
+      Number(selectedStatusObj?.step_order) ||
+      Number(currentMatchedStatus?.step_order) ||
+      Number(order?.order_status?.step_order) ||
+      Number(order?.status_step_order) ||
+      1;
+
+    const currentCode = (
+      selectedStatusObj?.code ||
+      selectedStatusName ||
+      order?.status ||
+      ""
+    ).toLowerCase();
+    const currentName = (
+      selectedStatusObj?.name ||
+      selectedStatusName ||
+      order?.status ||
+      ""
+    ).toLowerCase();
+
+    // Past pickup phase jika step_order > 2 atau nama/kode status mencakup cuci, setrika, antar, selesai
+    const isPastPickup =
+      currentStep > 2 ||
+      currentCode.includes("cuci") ||
+      currentCode.includes("setrika") ||
+      currentCode.includes("antar") ||
+      currentCode.includes("selesai") ||
+      currentName.includes("cuci") ||
+      currentName.includes("setrika") ||
+      currentName.includes("antar") ||
+      currentName.includes("selesai");
+
+    return isPastPickup;
+  }, [selectedStatusObj, currentMatchedStatus, order, selectedStatusName]);
 
   // Dynamic timeline steps connected directly to active master order statuses
   const timelineSteps = useMemo(() => {
@@ -157,20 +288,24 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
   const handleExecuteSave = async () => {
     if (!selectedStatusName && !selectedStatusId) return;
     try {
-      await updateStatusMutation.mutateAsync({
+      await updateOrderMutation.mutateAsync({
         orderId: effectiveOrderId || order?.id || "",
-        status: selectedStatusName,
-        order_statuses_id: selectedStatusId || undefined,
+        orderData: {
+          status: selectedStatusName,
+          order_statuses_id: selectedStatusId || undefined,
+          courier_name: courierName.trim(),
+          courier_phone: courierPhone.trim(),
+        },
       });
 
       setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
       toast.success(
-        `Status pengerjaan pesanan berhasil diperbarui menjadi "${selectedStatusName}"!`,
+        `Perubahan data dan status pesanan #${order?.invoice_no} berhasil disimpan!`,
       );
       router.push("/order");
     } catch (err: any) {
       setConfirmDialog((prev) => ({ ...prev, isOpen: false }));
-      toast.error(err.message || "Gagal memperbarui status pesanan");
+      toast.error(err.message || "Gagal memperbarui data pesanan");
     }
   };
 
@@ -183,10 +318,10 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
 
     setConfirmDialog({
       isOpen: true,
-      title: "Konfirmasi Perubahan Status Pesanan",
-      description: `Apakah Anda yakin ingin memperbarui status pesanan ${order?.invoice_no} menjadi "${selectedStatusName}"?`,
+      title: "Konfirmasi Perubahan Pesanan",
+      description: `Apakah Anda yakin ingin menyimpan perubahan data pesanan ${order?.invoice_no}?`,
       variant: "update",
-      confirmText: "Ya, Simpan Status",
+      confirmText: "Ya, Simpan Perubahan",
       onConfirm: async () => {
         await handleExecuteSave();
       },
@@ -280,7 +415,11 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
             <div className="flex items-center gap-2 text-xs font-bold text-sky-700 uppercase tracking-wider">
               <span>Operasional Laundry</span>
               <span>/</span>
-              <span>{isEdit ? "Update Status Pesanan" : "Detail Pesanan"}</span>
+              <span>
+                {isEdit
+                  ? "Update Status & Kurir Pesanan"
+                  : "Detail Informasi Pesanan"}
+              </span>
             </div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900 mt-0.5">
               Invoice #{order.invoice_no}
@@ -299,7 +438,7 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
       {/* 2. Main Form / Card Wrapper */}
       <form onSubmit={handleTriggerSave}>
         <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
-          {/* Section 1: Ringkasan Paket & Rincian Pesanan */}
+          {/* Section 1: Ringkasan Paket & Rincian Pesanan (Read-only on both modes) */}
           <div>
             <div className="border-b border-slate-100 pb-4 mb-5">
               <h2 className="text-base font-bold text-slate-900">
@@ -367,7 +506,7 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
             </div>
           </div>
 
-          {/* Section 2: Pembaruan Status Pengerjaan (Aktif pada mode Edit, Readonly pada mode Detail) */}
+          {/* Section 2: Status Pengerjaan Cucian (Interactive on Edit mode, Readonly/Disabled on Detail mode) */}
           <div className="space-y-3 pt-1">
             <div className="border-b border-slate-100 pb-3">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -376,7 +515,7 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
               <p className="text-xs text-slate-500 mt-0.5">
                 {isEdit
                   ? "Pilih salah satu tahapan status SOP laundry di bawah ini untuk memperbarui proses cucian:"
-                  : "Status pengerjaan pesanan saat ini:"}
+                  : "Status tahapan pengerjaan pesanan saat ini:"}
               </p>
             </div>
 
@@ -407,7 +546,7 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                           ? "bg-sky-50/90 border-sky-500 shadow-xs ring-2 ring-sky-500/20 cursor-pointer"
                           : "bg-slate-50/70 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300 cursor-pointer"
                         : isSelected
-                          ? "bg-sky-50 border-sky-400 font-bold opacity-100"
+                          ? "bg-sky-50 border-sky-400 font-bold opacity-100 cursor-default"
                           : "bg-slate-50/50 border-slate-200 text-slate-400 opacity-60 cursor-not-allowed",
                     )}
                   >
@@ -426,7 +565,221 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
             </div>
           </div>
 
-          {/* Section 3: Logistik & Alamat Pengiriman (Informasi Pelanggan) */}
+          {/* Section 3: Penugasan Kurir (Interactive Form on Edit mode, Pure Readonly on Detail mode) */}
+          <div className="space-y-4 pt-1">
+            <div className="border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <span>Penugasan Kurir Antar-Jemput</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {isEdit
+                  ? isCourierFormDisabled
+                    ? "Form penugasan kurir dinonaktifkan karena cucian sudah melewati tahap penjemputan:"
+                    : "Tugaskan petugas kurir untuk penjemputan atau pengantaran pesanan ini:"
+                  : "Informasi petugas kurir yang menangani pesanan ini:"}
+              </p>
+            </div>
+
+            {isEdit ? (
+              <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-5 space-y-4">
+                {isCourierFormDisabled && (
+                  <div className="flex items-center gap-2.5 p-3 bg-amber-50 border border-amber-200/80 rounded-xl text-xs text-amber-800">
+                    <Info size={15} className="text-amber-600 shrink-0" />
+                    <span>
+                      Penugasan kurir dinonaktifkan karena status pesanan telah
+                      berada di tahap{" "}
+                      <strong>
+                        {selectedStatusObj?.name || selectedStatusName}
+                      </strong>
+                      .
+                    </span>
+                  </div>
+                )}
+
+                {/* Select from registered staff */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    Pilih Petugas Kurir Terdaftar
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <Select
+                        key={selectedCourierUserId || "empty"}
+                        value={selectedCourierUserId || undefined}
+                        onValueChange={(val) => handleCourierUserSelect(val)}
+                        disabled={
+                          isCourierFormDisabled ||
+                          isLoadingUsers ||
+                          updateOrderMutation.isPending
+                        }
+                      >
+                        <SelectTrigger
+                          clearable={
+                            !isCourierFormDisabled &&
+                            Boolean(
+                              selectedCourierUserId ||
+                              courierName ||
+                              courierPhone,
+                            )
+                          }
+                          onClear={handleClearCourier}
+                          className={cn(
+                            "w-full bg-white border-slate-200 rounded-xl text-xs text-slate-900 h-10 focus:ring-1 focus:ring-sky-500 focus:border-sky-500",
+                            isCourierFormDisabled &&
+                              "bg-slate-100/90 text-slate-400 border-slate-200 cursor-not-allowed select-none",
+                          )}
+                        >
+                          <SelectValue placeholder="Pilih Petugas Kurir Terdaftar" />
+                        </SelectTrigger>
+                        <SelectContent className="z-[60]">
+                          {registeredCouriers.length > 0 ? (
+                            <SelectGroup>
+                              <SelectLabel>Daftar Petugas Kurir</SelectLabel>
+                              {registeredCouriers.map((u) => (
+                                <SelectItem key={u.id} value={String(u.id)}>
+                                  {u.name} ({u.role_name || u.role_code}){" "}
+                                  {u.phone ? `• ${u.phone}` : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          ) : (
+                            <div className="py-2.5 px-3 text-center text-xs text-slate-400 italic">
+                              Tidak ada data kurir aktif terdaftar
+                            </div>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {!isCourierFormDisabled &&
+                      (courierName ||
+                        courierPhone ||
+                        selectedCourierUserId) && (
+                        <button
+                          type="button"
+                          onClick={handleClearCourier}
+                          className="p-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl border border-rose-200 transition-colors cursor-pointer shrink-0"
+                          title="Hapus penugasan kurir"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Input Nama Kurir */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Nama Kurir
+                    </label>
+                    <div className="relative">
+                      <UserIcon
+                        size={15}
+                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                      />
+                      <input
+                        type="text"
+                        value={courierName}
+                        onChange={(e) => setCourierName(e.target.value)}
+                        placeholder="Nama Kurir"
+                        disabled={
+                          isCourierFormDisabled || updateOrderMutation.isPending
+                        }
+                        className={cn(
+                          "w-full pl-9 pr-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-sky-600 transition-colors",
+                          isCourierFormDisabled &&
+                            "bg-slate-100/90 text-slate-500 border-slate-200 cursor-not-allowed",
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Input No. Telepon Kurir */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      Nomor Telepon / WhatsApp Kurir
+                    </label>
+                    <div
+                      className={cn(
+                        "flex items-center bg-white border border-slate-200 rounded-xl focus-within:border-sky-600 focus-within:ring-1 focus-within:ring-sky-500/20 transition-colors h-[42px]",
+                        isCourierFormDisabled &&
+                          "bg-slate-100/90 border-slate-200 cursor-not-allowed",
+                      )}
+                    >
+                      <span className="pl-3.5 pr-1.5 text-xs text-slate-700 font-medium select-none shrink-0 flex items-center gap-1.5">
+                        <Phone size={14} className="text-slate-400 shrink-0" />
+                        <span>+62</span>
+                      </span>
+                      <input
+                        type="text"
+                        value={stripCountryCode(courierPhone || "")}
+                        onChange={(e) => {
+                          const stripped = stripCountryCode(e.target.value);
+                          setCourierPhone(stripped ? `+62 ${stripped}` : "");
+                        }}
+                        placeholder="812-xxxx-xxxx"
+                        disabled={
+                          isCourierFormDisabled || updateOrderMutation.isPending
+                        }
+                        className={cn(
+                          "w-full bg-transparent pr-3.5 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none",
+                          isCourierFormDisabled &&
+                            "cursor-not-allowed text-slate-500",
+                        )}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div
+                    className={cn(
+                      "w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border",
+                      order.courier_name
+                        ? "bg-sky-100 text-sky-700 border-sky-200"
+                        : "bg-slate-100 text-slate-400 border-slate-200",
+                    )}
+                  >
+                    <UserIcon size={22} />
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Kurir Bertugas
+                    </div>
+                    <div className="text-sm font-bold text-slate-900 mt-0.5">
+                      {order.courier_name || "Belum ada kurir ditugaskan"}
+                    </div>
+                    {order.courier_phone ? (
+                      <div className="text-xs text-sky-700 font-medium flex items-center gap-1.5 mt-0.5">
+                        <Phone size={12} className="shrink-0" />
+                        <span>{order.courier_phone}</span>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        {order.courier_name
+                          ? "Nomor telepon tidak dicantumkan"
+                          : "Belum ada kurir yang ditugaskan"}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {order.courier_name && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="success" className="text-xs">
+                      <UserCheck size={12} className="mr-1 inline" />
+                      Aktif Bertugas
+                    </Badge>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Section 4: Logistik & Alamat Pengiriman (Readonly on both modes) */}
           <div className="space-y-4 pt-2">
             <div className="border-b border-slate-100 pb-2">
               <h3 className="text-sm font-bold text-slate-900">
@@ -455,16 +808,6 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                 <p className="text-xs text-slate-800 leading-relaxed font-medium">
                   {order.delivery_address || "-"}
                 </p>
-
-                {order.courier_name && (
-                  <div className="flex items-center gap-2 pt-2.5 text-xs text-sky-800 font-medium border-t border-slate-200 mt-2">
-                    <Truck size={15} className="text-sky-600 shrink-0" />
-                    <span>
-                      Kurir: <strong>{order.courier_name}</strong>{" "}
-                      {order.courier_phone ? `(${order.courier_phone})` : ""}
-                    </span>
-                  </div>
-                )}
               </div>
 
               {/* Catatan Pelanggan */}
@@ -481,7 +824,7 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
             </div>
           </div>
 
-          {/* Section 4: Stepper Timeline (Hanya ditampilkan pada mode Detail) */}
+          {/* Section 5: Stepper Timeline (Readonly on Detail mode) */}
           {!isEdit && (
             <div className="space-y-4 pt-2">
               <div className="border-b border-slate-100 pb-2">
@@ -522,30 +865,29 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
             </div>
           )}
 
-          {/* Action Buttons Footer di Mode Edit */}
+          {/* Bottom Actions (Hanya pada mode Edit) */}
           {isEdit && (
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+            <div className="pt-6 border-t border-slate-100 flex items-center justify-end gap-3">
               <Link
                 href="/order"
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
               >
-                <XCircle size={15} />
-                <span>Batal</span>
+                Batal
               </Link>
               <Button
                 type="submit"
-                disabled={updateStatusMutation.isPending}
-                className="inline-flex items-center gap-2 px-5 py-2.5 h-auto bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-sky-600/20 cursor-pointer disabled:cursor-not-allowed"
+                disabled={updateOrderMutation.isPending}
+                className="px-6 py-2.5 h-auto bg-sky-600 hover:bg-sky-700 disabled:bg-sky-400 text-white rounded-xl text-xs font-bold shadow-md shadow-sky-600/20 transition-all cursor-pointer flex items-center gap-2 disabled:cursor-not-allowed"
               >
-                {updateStatusMutation.isPending ? (
+                {updateOrderMutation.isPending ? (
                   <>
-                    <Loader2 size={15} className="animate-spin" />
+                    <Loader2 size={16} className="animate-spin" />
                     <span>Menyimpan...</span>
                   </>
                 ) : (
                   <>
-                    <Save size={15} />
-                    <span>Simpan Status</span>
+                    <Save size={16} />
+                    <span>Simpan Perubahan</span>
                   </>
                 )}
               </Button>
@@ -555,16 +897,18 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
       </form>
 
       {/* Universal Confirm Dialog */}
-      <ConfirmDialog
-        isOpen={confirmDialog.isOpen}
-        title={confirmDialog.title}
-        description={confirmDialog.description}
-        variant={confirmDialog.variant}
-        confirmText={confirmDialog.confirmText}
-        isLoading={updateStatusMutation.isPending}
-        onConfirm={confirmDialog.onConfirm}
-        onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
-      />
+      {isEdit && (
+        <ConfirmDialog
+          isOpen={confirmDialog.isOpen}
+          title={confirmDialog.title}
+          description={confirmDialog.description}
+          variant={confirmDialog.variant}
+          confirmText={confirmDialog.confirmText}
+          isLoading={updateOrderMutation.isPending}
+          onConfirm={confirmDialog.onConfirm}
+          onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+        />
+      )}
     </div>
   );
 };

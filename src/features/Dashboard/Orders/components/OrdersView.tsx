@@ -163,11 +163,11 @@ export const OrdersView: React.FC = () => {
           const courier = row.original.courier_name;
           return courier ? (
             <div className="flex items-center gap-1.5 font-medium text-slate-700">
-              <Truck size={13} className="text-sky-600" />
+              <Truck size={13} className="text-sky-600 shrink-0" />
               <span>{courier}</span>
             </div>
           ) : (
-            <span className="text-slate-400">-</span>
+            <span className="text-slate-400 font-medium">-</span>
           );
         },
       },
@@ -183,34 +183,37 @@ export const OrdersView: React.FC = () => {
       {
         id: "actions",
         header: () => <div className="text-right">Aksi</div>,
-        cell: ({ row }) => (
-          <div className="flex items-center justify-end gap-1.5">
-            <button
-              type="button"
-              onClick={() =>
-                router.push(
-                  `/order/${encodeURIComponent(row.original.id)}/detail`,
-                )
-              }
-              className="p-1.5 text-sky-600 hover:text-sky-700 hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
-              title="Lihat Detail Pesanan"
-            >
-              <Eye size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                router.push(
-                  `/order/${encodeURIComponent(row.original.id)}/edit`,
-                )
-              }
-              className="p-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
-              title="Edit Status Pesanan"
-            >
-              <Edit3 size={15} />
-            </button>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const ord = row.original;
+          return (
+            <div className="flex items-center justify-end gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    `/order/${encodeURIComponent(ord.id)}/detail`,
+                  )
+                }
+                className="p-1.5 text-sky-600 hover:text-sky-700 hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
+                title="Lihat Detail Pesanan"
+              >
+                <Eye size={15} />
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    `/order/${encodeURIComponent(ord.id)}/edit`,
+                  )
+                }
+                className="p-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                title="Edit Status & Penugasan Kurir"
+              >
+                <Edit3 size={15} />
+              </button>
+            </div>
+          );
+        },
         enableSorting: false,
       },
     ],
