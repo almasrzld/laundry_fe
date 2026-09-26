@@ -8,6 +8,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { usePermission } from '../hooks/usePermission';
 import { useSidebarMenusQuery } from '../hooks/useMenuQuery';
 import { isCustomerRole } from '../lib/role';
+import { NotificationDropdown } from './NotificationDropdown';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -138,11 +139,8 @@ export const Navbar: React.FC = () => {
           </div>
         )}
 
-        {/* Notifications */}
-        <button className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors relative cursor-pointer">
-          <Bell size={18} />
-          <span className="w-2 h-2 rounded-full bg-sky-500 absolute top-2 right-2 ring-2 ring-white" />
-        </button>
+        {/* Notifications Dropdown */}
+        <NotificationDropdown />
 
         {/* User Profile with shadcn DropdownMenu */}
         <div className="pl-3 border-l border-slate-200">
