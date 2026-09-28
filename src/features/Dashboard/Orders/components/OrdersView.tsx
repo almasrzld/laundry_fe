@@ -39,11 +39,18 @@ export const OrdersView: React.FC = () => {
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {
       const q = debouncedSearch.toLowerCase().trim();
+      const customerName = (o.customer_name || o.user_name || "").toLowerCase();
+      const customerPhone = (o.customer_phone || o.user_phone || "").toLowerCase();
+      const customerEmail = (o.customer_email || o.user_email || "").toLowerCase();
+
       const matchesSearch =
         !q ||
         o.invoice_no.toLowerCase().includes(q) ||
         o.service_name.toLowerCase().includes(q) ||
-        (o.courier_name && o.courier_name.toLowerCase().includes(q));
+        (o.courier_name && o.courier_name.toLowerCase().includes(q)) ||
+        customerName.includes(q) ||
+        customerPhone.includes(q) ||
+        customerEmail.includes(q);
 
       if (!matchesSearch) return false;
 
@@ -92,6 +99,30 @@ export const OrdersView: React.FC = () => {
             {row.original.invoice_no}
           </span>
         ),
+      },
+      {
+        id: "customer",
+        header: "Pelanggan",
+        cell: ({ row }) => {
+          const ord = row.original;
+          const name = ord.customer_name || ord.user_name;
+          const phone = ord.customer_phone || ord.user_phone;
+          if (!name) {
+            return <span className="text-slate-400 font-medium">-</span>;
+          }
+          return (
+            <div>
+              <div className="font-bold text-slate-900 truncate max-w-[160px]">
+                {name}
+              </div>
+              {phone && (
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  {phone}
+                </div>
+              )}
+            </div>
+          );
+        },
       },
       {
         accessorKey: "service_name",

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Users, UserX, Key } from "lucide-react";
+import { Users, UserX, Key, Smartphone } from "lucide-react";
 import { Tabs, TabItem } from "@/components/Tabs";
 import {
   useActiveUsersQuery,
@@ -12,8 +12,9 @@ import { ActiveUsersTab } from "./tabs/ActiveUsersTab";
 import { InactiveUsersTab } from "./tabs/InactiveUsersTab";
 import { RolesTab } from "./tabs/RolesTab";
 import { PermissionsTab } from "./tabs/PermissionsTab";
+import { MobilePermissionsTab } from "./tabs/MobilePermissionsTab";
 
-export type UserManagementTab = "active" | "inactive" | "roles" | "permissions";
+export type UserManagementTab = "active" | "inactive" | "roles" | "permissions" | "mobile_permissions";
 
 export const UserManagementView: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<UserManagementTab>("active");
@@ -45,6 +46,11 @@ export const UserManagementView: React.FC = () => {
       label: "Akses",
       icon: <Key size={16} />,
     },
+    {
+      id: "mobile_permissions",
+      label: "Akses Mobile",
+      icon: <Smartphone size={16} />,
+    },
   ];
 
   return (
@@ -71,6 +77,7 @@ export const UserManagementView: React.FC = () => {
         {currentTab === "inactive" && <InactiveUsersTab />}
         {currentTab === "roles" && <RolesTab />}
         {currentTab === "permissions" && <PermissionsTab />}
+        {currentTab === "mobile_permissions" && <MobilePermissionsTab />}
       </div>
     </div>
   );

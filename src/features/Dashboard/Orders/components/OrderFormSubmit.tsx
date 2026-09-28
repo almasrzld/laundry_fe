@@ -18,6 +18,10 @@ import {
   Info,
   Trash2,
   UserCheck,
+  Mail,
+  MessageCircle,
+  Star,
+  Crown,
 } from "lucide-react";
 import { formatRupiah, formatDate, cn, stripCountryCode } from "@/lib/utils";
 import { Badge } from "@/components/Badge";
@@ -506,6 +510,136 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
             </div>
           </div>
 
+          {/* Section: Informasi Pemesan / Pelanggan */}
+          <div className="space-y-3 pt-1">
+            <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <span>Informasi Pemesan / Pelanggan</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Rincian akun pelanggan yang melakukan pemesanan laundry ini:
+                </p>
+              </div>
+              {order.customer_member_tier && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                  <Crown size={13} className="text-amber-600" />
+                  {order.customer_member_tier}
+                </span>
+              )}
+            </div>
+
+            <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-5">
+              {order.customer_name || order.user_name ? (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-2xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold text-base border border-sky-200 shrink-0">
+                      {(order.customer_name || order.user_name)![0].toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                        Nama Pelanggan
+                      </div>
+                      <div className="text-sm font-bold text-slate-900 mt-0.5">
+                        {order.customer_name || order.user_name}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 mt-1">
+                        {(order.customer_phone || order.user_phone) && (
+                          <div className="flex items-center gap-1.5 font-medium text-sky-700">
+                            <Phone size={12} className="text-sky-600 shrink-0" />
+                            <span>
+                              {order.customer_phone || order.user_phone}
+                            </span>
+                          </div>
+                        )}
+                        {(order.customer_email || order.user_email) && (
+                          <div className="flex items-center gap-1.5 text-slate-500">
+                            <Mail size={12} className="text-slate-400 shrink-0" />
+                            <span>
+                              {order.customer_email || order.user_email}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Action WhatsApp */}
+                  {(order.customer_phone || order.user_phone) && (
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={`https://wa.me/${(order.customer_phone || order.user_phone || "").replace(/[^0-9]/g, "")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                      >
+                        <MessageCircle size={14} />
+                        <span>Chat WhatsApp Pelanggan</span>
+                      </a>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400 italic">
+                  Data akun pelanggan tidak tercatat pada sistem untuk pesanan ini.
+                </div>
+              )}
+
+              {/* Notes from customer */}
+              {order.notes && (
+                <div className="mt-4 pt-3.5 border-t border-slate-200/80">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Catatan Khusus dari Pelanggan:
+                  </div>
+                  <p className="text-xs text-slate-700 italic bg-white p-3 rounded-xl border border-slate-200">
+                    &ldquo;{order.notes}&rdquo;
+                  </p>
+                </div>
+              )}
+
+              {/* Rating & Review Section if provided */}
+              {Boolean(order.rating) && (
+                <div className="mt-4 pt-3.5 border-t border-slate-200/80 bg-amber-50/60 p-4 rounded-xl border border-amber-200/80">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center text-amber-500">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star
+                            key={i}
+                            size={15}
+                            className={
+                              i < (order.rating || 0)
+                                ? "fill-amber-400 text-amber-400"
+                                : "text-slate-300"
+                            }
+                          />
+                        ))}
+                      </div>
+                      <span className="font-bold text-xs text-amber-900">
+                        {order.rating} / 5 Bintang
+                      </span>
+                    </div>
+                    {order.tip_amount && order.tip_amount > 0 ? (
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md">
+                        Tips Kurir: {formatRupiah(order.tip_amount)}
+                      </span>
+                    ) : null}
+                  </div>
+                  {order.review && (
+                    <p className="text-xs text-amber-950 mt-2 italic font-medium">
+                      &ldquo;{order.review}&rdquo;
+                    </p>
+                  )}
+                  {order.rated_at && (
+                    <div className="text-[10px] text-amber-700 mt-1">
+                      Diulas pada {formatDate(order.rated_at)}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Section 2: Status Pengerjaan Cucian (Interactive on Edit mode, Readonly/Disabled on Detail mode) */}
           <div className="space-y-3 pt-1">
             <div className="border-b border-slate-100 pb-3">
@@ -906,7 +1040,9 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
           confirmText={confirmDialog.confirmText}
           isLoading={updateOrderMutation.isPending}
           onConfirm={confirmDialog.onConfirm}
-          onClose={() => setConfirmDialog((prev) => ({ ...prev, isOpen: false }))}
+          onClose={() =>
+            setConfirmDialog((prev) => ({ ...prev, isOpen: false }))
+          }
         />
       )}
     </div>

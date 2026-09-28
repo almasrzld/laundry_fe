@@ -96,6 +96,17 @@ export interface Order {
   delivery_address: string;
   courier_name?: string;
   courier_phone?: string;
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  customer_email?: string | null;
+  customer_member_tier?: string | null;
+  user_name?: string | null;
+  user_phone?: string | null;
+  user_email?: string | null;
+  rating?: number | null;
+  review?: string | null;
+  tip_amount?: number;
+  rated_at?: string | null;
   notes?: string;
   timeline?: OrderTimelineStep[];
 }

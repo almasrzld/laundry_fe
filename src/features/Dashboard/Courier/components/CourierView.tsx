@@ -1,0 +1,582 @@
+"use client";
+
+import React, { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Truck,
+  Users,
+  Coins,
+  Star,
+  Search,
+  CheckCircle2,
+  Clock,
+  Phone,
+  MessageCircle,
+  Eye,
+  Calendar,
+  MapPin,
+} from "lucide-react";
+import { ColumnDef } from "@tanstack/react-table";
+import {
+  useCouriersQuery,
+  useCourierSummaryQuery,
+  useCourierTasksQuery,
+  CourierUser,
+} from "@/hooks/useCourierQuery";
+import { formatRupiah, formatDate } from "@/lib/utils";
+import { Badge } from "@/components/Badge";
+import { DataTable } from "@/components/ui/data-table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Order } from "@/types";
+
+export const CourierView: React.FC = () => {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"couriers" | "tasks">("couriers");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCourierFilter, setSelectedCourierFilter] = useState("all");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState("all");
+
+  const { data: summary, isLoading: isLoadingSummary } = useCourierSummaryQuery();
+  const { data: couriers = [], isLoading: isLoadingCouriers } = useCouriersQuery();
+  const { data: tasks = [], isLoading: isLoadingTasks } = useCourierTasksQuery();
+
+  // Filter couriers
+  const filteredCouriers = useMemo(() => {
+    return couriers.filter((c) => {
+      const q = searchQuery.toLowerCase().trim();
+      if (!q) return true;
+      return (
+        c.name.toLowerCase().includes(q) ||
+        c.phone.toLowerCase().includes(q) ||
+        c.email.toLowerCase().includes(q)
+      );
+    });
+  }, [couriers, searchQuery]);
+
+  // Filter tasks
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchCourier =
+        selectedCourierFilter === "all" ||
+        t.courier_name?.toLowerCase() === selectedCourierFilter.toLowerCase();
+
+      if (!matchCourier) return false;
+
+      if (selectedStatusFilter === "active") {
+        const isCompleted =
+          t.status?.toLowerCase().includes("selesai") ||
+          t.status_code === "pesanan-selesai" ||
+          t.status_code === "completed";
+        if (isCompleted) return false;
+      } else if (selectedStatusFilter === "completed") {
+        const isCompleted =
+          t.status?.toLowerCase().includes("selesai") ||
+          t.status_code === "pesanan-selesai" ||
+          t.status_code === "completed";
+        if (!isCompleted) return false;
+      }
+
+      if (!q) return true;
+
+      return (
+        t.invoice_no?.toLowerCase().includes(q) ||
+        (t.courier_name || "").toLowerCase().includes(q) ||
+        (t.customer_name || t.user_name || "").toLowerCase().includes(q) ||
+        (t.pickup_address || "").toLowerCase().includes(q) ||
+        (t.service_name || "").toLowerCase().includes(q)
+      );
+    });
+  }, [tasks, searchQuery, selectedCourierFilter, selectedStatusFilter]);
+
+  // Standard TanStack Table Columns: Couriers Tab
+  const courierColumns = useMemo<ColumnDef<CourierUser>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        id: "name",
+        header: "Nama Staf Kurir",
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-sky-100 text-sky-800 font-bold flex items-center justify-center border border-sky-200 shrink-0">
+                {c.name ? c.name[0].toUpperCase() : "K"}
+              </div>
+              <div>
+                <div className="font-bold text-slate-900 text-xs">{c.name}</div>
+                <div className="text-[11px] text-slate-400">{c.email}</div>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "phone",
+        header: "Kontak",
+        cell: ({ row }) => {
+          const phone = row.original.phone;
+          if (!phone) return <span className="text-slate-400 font-medium">-</span>;
+          return (
+            <div className="flex items-center gap-2">
+              <Phone size={12} className="text-slate-400 shrink-0" />
+              <span className="font-medium text-slate-700 text-xs">{phone}</span>
+              <a
+                href={`https://wa.me/${phone.replace(/[^0-9]/g, "")}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-colors"
+                title="Chat WhatsApp"
+              >
+                <MessageCircle size={13} />
+              </a>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "total_orders",
+        header: () => <div className="text-center">Total Tugas</div>,
+        cell: ({ row }) => (
+          <div className="text-center font-bold text-slate-800 text-xs">
+            {row.original.total_orders}
+          </div>
+        ),
+      },
+      {
+        accessorKey: "completed_orders",
+        header: () => <div className="text-center">Selesai</div>,
+        cell: ({ row }) => (
+          <div className="text-center font-bold text-emerald-600 text-xs">
+            {row.original.completed_orders}
+          </div>
+        ),
+      },
+      {
+        accessorKey: "total_tips",
+        header: "Total Tips Diterima",
+        cell: ({ row }) => (
+          <span className="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 text-xs">
+            {formatRupiah(row.original.total_tips || 0)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "average_rating",
+        header: "Rating Pelanggan",
+        cell: ({ row }) => {
+          const rating = row.original.average_rating;
+          if (!rating || rating <= 0) {
+            return <span className="text-slate-400 font-medium">-</span>;
+          }
+          return (
+            <div className="flex items-center gap-1.5 text-amber-600 font-bold text-xs">
+              <Star size={13} className="fill-amber-400 text-amber-400 shrink-0" />
+              <span>{rating} / 5.0</span>
+            </div>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: () => <div className="text-right">Aksi</div>,
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <div className="flex items-center justify-end gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCourierFilter(c.name);
+                  setActiveTab("tasks");
+                }}
+                className="p-1.5 text-sky-600 hover:text-sky-700 hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
+                title="Lihat Daftar Tugas Kurir Ini"
+              >
+                <Eye size={15} />
+              </button>
+            </div>
+          );
+        },
+        enableSorting: false,
+      },
+    ],
+    []
+  );
+
+  // Standard TanStack Table Columns: Delivery Tasks Tab
+  const taskColumns = useMemo<ColumnDef<Order>[]>(
+    () => [
+      {
+        accessorKey: "order_date",
+        header: "Tanggal & Nota",
+        cell: ({ row }) => {
+          const t = row.original;
+          return (
+            <div>
+              <div className="font-mono font-bold text-sky-700 text-xs">
+                {t.invoice_no}
+              </div>
+              <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5 whitespace-nowrap">
+                <Calendar size={11} />
+                <span>{formatDate(t.order_date)}</span>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "courier_name",
+        header: "Kurir Bertugas",
+        cell: ({ row }) => {
+          const t = row.original;
+          return (
+            <div>
+              <div className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                <Truck size={13} className="text-sky-600 shrink-0" />
+                <span>{t.courier_name}</span>
+              </div>
+              {t.courier_phone && (
+                <div className="text-[11px] text-slate-400 mt-0.5">
+                  {t.courier_phone}
+                </div>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        id: "customer_address",
+        header: "Pelanggan & Alamat",
+        cell: ({ row }) => {
+          const t = row.original;
+          const custName = t.customer_name || t.user_name;
+          const custPhone = t.customer_phone || t.user_phone;
+          const address = t.pickup_address || t.delivery_address;
+          return (
+            <div className="max-w-[200px]">
+              <div className="font-bold text-slate-900 text-xs truncate">
+                {custName || "-"}
+              </div>
+              {custPhone && (
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  {custPhone}
+                </div>
+              )}
+              {address && (
+                <div
+                  className="text-[11px] text-slate-400 flex items-start gap-1 mt-0.5 line-clamp-1"
+                  title={address}
+                >
+                  <MapPin size={11} className="shrink-0 mt-0.5 text-slate-400" />
+                  <span className="truncate">{address}</span>
+                </div>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "service_name",
+        header: "Layanan & Qty",
+        cell: ({ row }) => {
+          const t = row.original;
+          return (
+            <div>
+              <div className="font-semibold text-slate-800 text-xs">
+                {t.service_name}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                {t.quantity} {t.unit}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "status",
+        header: "Status Pengerjaan",
+        cell: ({ row }) => {
+          const t = row.original;
+          return (
+            <Badge variant={(t.status_badge_variant as any) || "info"}>
+              {t.status_name || t.status}
+            </Badge>
+          );
+        },
+      },
+      {
+        accessorKey: "tip_amount",
+        header: "Tips Pelanggan",
+        cell: ({ row }) => {
+          const tip = row.original.tip_amount;
+          if (!tip || tip <= 0) {
+            return <span className="text-slate-400 font-medium text-xs">-</span>;
+          }
+          return (
+            <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 text-xs">
+              {formatRupiah(tip)}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "rating",
+        header: "Rating & Ulasan",
+        cell: ({ row }) => {
+          const t = row.original;
+          if (!t.rating) {
+            return <span className="text-slate-400 font-medium text-xs">-</span>;
+          }
+          return (
+            <div>
+              <div className="flex items-center gap-1 text-amber-500 font-bold text-xs">
+                <Star size={12} className="fill-amber-400 text-amber-400" />
+                <span>{t.rating} / 5</span>
+              </div>
+              {t.review && (
+                <div
+                  className="text-[10px] text-slate-600 italic line-clamp-1 mt-0.5 max-w-[140px]"
+                  title={t.review}
+                >
+                  &ldquo;{t.review}&rdquo;
+                </div>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: () => <div className="text-right">Aksi</div>,
+        cell: ({ row }) => {
+          const task = row.original;
+          return (
+            <div className="flex items-center justify-end gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(`/courier/${encodeURIComponent(task.id)}/detail`)
+                }
+                className="p-1.5 text-sky-600 hover:text-sky-700 hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
+                title="Lihat Detail Tugas Kurir"
+              >
+                <Eye size={15} />
+              </button>
+            </div>
+          );
+        },
+        enableSorting: false,
+      },
+    ],
+    [router]
+  );
+
+  return (
+    <div className="space-y-6 pb-12 animate-in fade-in duration-300">
+      {/* 1. Header Halaman */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold text-sky-700 uppercase tracking-wider">
+            <span>Operasional Laundry</span>
+            <span>/</span>
+            <span>Manajemen Kurir & Tips</span>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 mt-1 flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center">
+              <Truck size={20} />
+            </div>
+            <span>Manajemen Kurir & Layanan Antar</span>
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Pantau penugasan penjemputan/pengantaran cucian, performa kurir, serta akumulasi tips riil dari pelanggan.
+          </p>
+        </div>
+      </div>
+
+      {/* 2. 4 Kartu Metrik Riil */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1: Total Kurir */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0 border border-sky-100">
+            <Users size={24} />
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-slate-500">Total Kurir Bertugas</div>
+            <div className="text-2xl font-bold text-slate-900 mt-0.5">
+              {isLoadingSummary ? "..." : summary?.total_couriers ?? 0}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">Staf kurir terdaftar</div>
+          </div>
+        </div>
+
+        {/* Card 2: Pengantaran Aktif */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
+            <Clock size={24} />
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-slate-500">Tugas Berjalan</div>
+            <div className="text-2xl font-bold text-slate-900 mt-0.5">
+              {isLoadingSummary ? "..." : summary?.active_deliveries ?? 0}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">Dalam proses antar / jemput</div>
+          </div>
+        </div>
+
+        {/* Card 3: Pengantaran Selesai */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+            <CheckCircle2 size={24} />
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-slate-500">Pengantaran Selesai</div>
+            <div className="text-2xl font-bold text-slate-900 mt-0.5">
+              {isLoadingSummary ? "..." : summary?.completed_deliveries ?? 0}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-0.5">Total pesanan diantar sukses</div>
+          </div>
+        </div>
+
+        {/* Card 4: Total Tips Terkumpul */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
+            <Coins size={24} />
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-slate-500">Total Tips dari Pelanggan</div>
+            <div className="text-xl font-bold text-indigo-700 mt-0.5">
+              {isLoadingSummary ? "..." : formatRupiah(summary?.total_tips || 0)}
+            </div>
+            <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+              <Star size={12} className="text-amber-500 fill-amber-500" />
+              <span className="font-semibold text-slate-700">
+                {summary?.average_rating ? `${summary.average_rating} / 5.0` : "-"}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Search & Filter Bar Standar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+        {/* Search Input */}
+        <div className="relative w-full sm:max-w-xs">
+          <Search
+            size={15}
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+          />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={
+              activeTab === "couriers"
+                ? "Cari nama, email, telepon kurir..."
+                : "Cari invoice, pelanggan, kurir, alamat..."
+            }
+            className="w-full pl-9 pr-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-sky-600 focus:bg-white transition-colors"
+          />
+        </div>
+
+        {/* Dropdown Filters Standar (Radix UI Select) */}
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          {activeTab === "tasks" && (
+            <>
+              {/* Filter Kurir */}
+              <div className="w-full sm:w-44">
+                <Select
+                  value={selectedCourierFilter}
+                  onValueChange={setSelectedCourierFilter}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Semua Kurir" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Semua Kurir</SelectItem>
+                    {couriers.map((c) => (
+                      <SelectItem key={c.id} value={c.name}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Filter Status */}
+              <div className="w-full sm:w-36">
+                <Select
+                  value={selectedStatusFilter}
+                  onValueChange={setSelectedStatusFilter}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Status Tugas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Semua Status</SelectItem>
+                    <SelectItem value="active">Tugas Berjalan</SelectItem>
+                    <SelectItem value="completed">Selesai</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
+
+          {/* Tab Selector */}
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setActiveTab("couriers")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeTab === "couriers"
+                  ? "bg-white text-slate-900 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Kurir & Tips ({couriers.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("tasks")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeTab === "tasks"
+                  ? "bg-white text-slate-900 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Tugas Antar-Jemput ({tasks.length})
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. TanStack DataTable Standar */}
+      {activeTab === "couriers" ? (
+        <DataTable
+          key="couriers-table"
+          columns={courierColumns}
+          data={filteredCouriers}
+          isLoading={isLoadingCouriers}
+          emptyMessage="Tidak ada staf kurir yang sesuai dengan pencarian."
+          pageSize={10}
+        />
+      ) : (
+        <DataTable
+          key="tasks-table"
+          columns={taskColumns}
+          data={filteredTasks}
+          isLoading={isLoadingTasks}
+          emptyMessage="Tidak ada tugas antar-jemput yang sesuai dengan filter atau pencarian."
+          pageSize={10}
+          defaultSorting={[{ id: "order_date", desc: true }]}
+        />
+      )}
+    </div>
+  );
+};
