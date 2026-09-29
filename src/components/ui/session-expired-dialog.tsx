@@ -43,7 +43,7 @@ export const SessionExpiredDialog: React.FC<SessionExpiredDialogProps> = ({
           defaultTitle: "Sesi Anda Telah Berakhir",
           defaultDescription:
             "Akun Anda telah masuk di perangkat lain. Demi keamanan akun, sesi pada perangkat ini telah dinonaktifkan.",
-          buttonClass: "bg-blue-600 hover:bg-blue-700 shadow-blue-500/25",
+          buttonClass: "bg-blue-600 hover:bg-blue-700",
           buttonText: "Oke",
         };
       case "expired":
@@ -55,7 +55,7 @@ export const SessionExpiredDialog: React.FC<SessionExpiredDialogProps> = ({
           defaultTitle: "Sesi Anda Telah Berakhir",
           defaultDescription:
             "Token autentikasi Anda telah kedaluwarsa. Demi keamanan akun, sesi telah diamankan secara otomatis.",
-          buttonClass: "bg-blue-600 hover:bg-blue-700 shadow-blue-500/25",
+          buttonClass: "bg-blue-600 hover:bg-blue-700",
           buttonText: "Oke",
         };
       case "inactivity":
@@ -67,7 +67,7 @@ export const SessionExpiredDialog: React.FC<SessionExpiredDialogProps> = ({
           icon: <Clock className="w-8 h-8 text-amber-600 animate-pulse" />,
           defaultTitle: "Sesi Anda Telah Berakhir",
           defaultDescription: `Anda tidak melakukan aktivitas selama ${timeText}. Demi keamanan akun, sesi telah diamankan secara otomatis.`,
-          buttonClass: "bg-blue-600 hover:bg-blue-700 shadow-blue-500/25",
+          buttonClass: "bg-blue-600 hover:bg-blue-700",
           buttonText: "Oke",
         };
     }
@@ -135,7 +135,7 @@ export const SessionExpiredDialog: React.FC<SessionExpiredDialogProps> = ({
             type="button"
             onClick={onConfirm}
             className={cn(
-              "w-full py-3 px-5 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]",
+              "w-full py-3 px-5 text-white font-bold text-xs sm:text-sm rounded-xl transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer border-none outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 select-none active:scale-[0.98]",
               config.buttonClass,
             )}
           >
