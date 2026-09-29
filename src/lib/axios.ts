@@ -37,7 +37,36 @@ apiClient.interceptors.response.use(
   (error: AxiosError<any>) => {
     if (error.response?.status === 401) {
       if (typeof window !== 'undefined') {
-        useAuthStore.getState().logout();
+        const errorData: any = error.response?.data;
+        const isConcurrent =
+          errorData?.error?.code === 'CONCURRENT_LOGIN' ||
+          (typeof errorData?.message === 'string' &&
+            errorData.message.toLowerCase().includes('perangkat lain'));
+
+        const reason = isConcurrent ? 'concurrent' : 'expired';
+        const message =
+          errorData?.message ||
+          (isConcurrent
+            ? 'Sesi Anda telah berakhir karena akun telah masuk di perangkat lain.'
+            : 'Sesi Anda telah berakhir atau tidak valid. Silakan masuk kembali.');
+
+        try {
+          sessionStorage.setItem(
+            'almas_session_expired',
+            JSON.stringify({
+              reason,
+              message,
+              timestamp: Date.now(),
+            })
+          );
+          window.dispatchEvent(
+            new CustomEvent('almas:session-expired', {
+              detail: { reason, message },
+            })
+          );
+        } catch (_) {}
+
+        useAuthStore.getState().logout(false);
         if (!window.location.pathname.startsWith('/auth/login')) {
           window.location.href = '/auth/login';
         }
@@ -58,4 +87,3 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
-
