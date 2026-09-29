@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { apiFetch } from '../lib/api';
 import { Role } from '../types';
+import { appConfig } from '../config/app.config';
 import {
   setCookie,
   getCookie,
@@ -9,7 +10,7 @@ import {
   getCookieJson,
 } from '../lib/cookies';
 
-export const INACTIVITY_TIMEOUT_MS = 60 * 60 * 1000; // 60 Menit
+export const INACTIVITY_TIMEOUT_MS = appConfig.inactivityTimeoutMs;
 export const LAST_ACTIVITY_COOKIE = 'almas_last_activity';
 export const AUTH_COOKIE = 'almas_is_authenticated';
 export const TOKEN_COOKIE = 'almas_auth_token';
@@ -37,7 +38,7 @@ export interface AuthState {
   setRole: (roleCode: string, roleName?: string) => void;
   login: (userData?: { name?: string; email?: string; role?: string; token?: string }) => void;
   updateUser: (data: { name?: string; email?: string }) => void;
-  logout: () => void;
+  logout: (callApi?: boolean) => void;
   updateActivity: () => void;
   isSessionExpired: () => boolean;
 }
@@ -182,6 +183,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (token) setCookie(TOKEN_COOKIE, token, { expires: 7 });
         setCookieJson(USER_COOKIE, { name, email, role }, { expires: 7 });
         setCookie(LAST_ACTIVITY_COOKIE, now.toString(), { expires: 7 });
+        localStorage.setItem(
+          'almas_auth_sync',
+          JSON.stringify({ event: 'login', timestamp: now })
+        );
       } catch (e) {
         console.error('Error saving auth to cookies:', e);
       }
@@ -217,13 +222,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
   },
 
-  logout: () => {
+  logout: (callApi = true) => {
     if (typeof window !== 'undefined') {
       try {
+        const token = getCookie(TOKEN_COOKIE);
+        if (callApi && token) {
+          apiFetch('/auth/logout', { method: 'POST' }).catch(() => {});
+        }
         removeCookie(AUTH_COOKIE);
         removeCookie(TOKEN_COOKIE);
         removeCookie(USER_COOKIE);
         removeCookie(LAST_ACTIVITY_COOKIE);
+        localStorage.setItem(
+          'almas_auth_sync',
+          JSON.stringify({ event: 'logout', timestamp: Date.now() })
+        );
       } catch (e) {
         console.error('Error clearing auth in cookies:', e);
       }

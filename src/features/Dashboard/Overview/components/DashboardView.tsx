@@ -249,6 +249,7 @@ export const DashboardView: React.FC = () => {
                   <thead className="text-slate-600 bg-slate-50 border-b border-slate-200 font-bold uppercase tracking-wider">
                     <tr>
                       <th className="py-3 px-4">Invoice</th>
+                      <th className="py-3 px-4">Pelanggan</th>
                       <th className="py-3 px-4">Layanan</th>
                       <th className="py-3 px-4">Total</th>
                       <th className="py-3 px-4">Status</th>
@@ -258,14 +259,14 @@ export const DashboardView: React.FC = () => {
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {isLoading && (
                       <tr>
-                        <td colSpan={5} className="py-6 text-center text-slate-400">
+                        <td colSpan={6} className="py-6 text-center text-slate-400">
                           Memuat pesanan...
                         </td>
                       </tr>
                     )}
                     {!isLoading && orders.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="py-6 text-center text-slate-400">
+                        <td colSpan={6} className="py-6 text-center text-slate-400">
                           Belum ada data pesanan.
                         </td>
                       </tr>
@@ -283,6 +284,22 @@ export const DashboardView: React.FC = () => {
                           >
                             <td className="py-3.5 px-4 font-mono font-bold text-sky-700">
                               {ord.invoice_no}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              {ord.customer_name || ord.user_name ? (
+                                <>
+                                  <span className="font-semibold text-slate-800 block truncate max-w-[140px]">
+                                    {ord.customer_name || ord.user_name}
+                                  </span>
+                                  {(ord.customer_phone || ord.user_phone) && (
+                                    <span className="text-[10px] text-slate-500 block truncate max-w-[140px]">
+                                      {ord.customer_phone || ord.user_phone}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-slate-400 font-medium">-</span>
+                              )}
                             </td>
                             <td className="py-3.5 px-4 font-medium text-slate-800">
                               {ord.service_name}

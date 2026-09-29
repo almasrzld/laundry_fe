@@ -46,14 +46,24 @@ export function DataTable<TData, TValue>({
   showNumberColumn = true,
   defaultSorting,
 }: DataTableProps<TData, TValue>) {
-  // Default sorting on column 1 (the first data column) with 'desc' order if not explicitly specified
+  // Default sorting on the first sortable data column with 'desc' order if not explicitly specified
   const initialSorting = React.useMemo<SortingState>(() => {
     if (defaultSorting) return defaultSorting;
     if (columns.length > 0) {
-      const firstColId =
-        columns[0].id || ((columns[0] as any).accessorKey as string | undefined);
-      if (firstColId && columns[0].enableSorting !== false) {
-        return [{ id: firstColId, desc: true }];
+      const sortableCol = columns.find((col) => {
+        const hasAccessor =
+          Boolean((col as any).accessorKey) || Boolean((col as any).accessorFn);
+        return hasAccessor && col.enableSorting !== false;
+      });
+
+      if (sortableCol) {
+        const colId =
+          (sortableCol as any).accessorKey ||
+          sortableCol.id ||
+          ((sortableCol as any).id as string);
+        if (colId) {
+          return [{ id: colId, desc: true }];
+        }
       }
     }
     return [];
@@ -64,6 +74,12 @@ export function DataTable<TData, TValue>({
     pageIndex: 0,
     pageSize: pageSize,
   });
+
+  // Sync sorting state when initialSorting/columns changes
+  React.useEffect(() => {
+    setSorting(initialSorting);
+    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+  }, [initialSorting]);
 
   // Automatically prepend a "No" column (Column index 0)
   const tableColumns = React.useMemo<ColumnDef<TData, any>[]>(() => {
@@ -91,11 +107,24 @@ export function DataTable<TData, TValue>({
     return [numberColumn, ...columns];
   }, [columns, showNumberColumn]);
 
+  // Guard against stale sorting column IDs that do not exist in the current tableColumns
+  const sanitizedSorting = React.useMemo<SortingState>(() => {
+    const validColumnIds = new Set<string>();
+    tableColumns.forEach((col) => {
+      const id = col.id || ((col as any).accessorKey as string);
+      if (id) validColumnIds.add(id);
+    });
+
+    const validCurrent = sorting.filter((s) => validColumnIds.has(s.id));
+    if (validCurrent.length > 0) return validCurrent;
+    return initialSorting.filter((s) => validColumnIds.has(s.id));
+  }, [tableColumns, sorting, initialSorting]);
+
   const table = useReactTable({
     data,
     columns: tableColumns,
     state: {
-      sorting,
+      sorting: sanitizedSorting,
       pagination,
     },
     onSortingChange: setSorting,

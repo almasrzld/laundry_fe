@@ -1,9 +1,11 @@
 "use client";
 
+import { appConfig } from '../config/app.config';
+
 export const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
-  const appName = process.env.NEXT_PUBLIC_APP_NAME || "Almas Laundry";
-  const appVersion = process.env.NEXT_PUBLIC_APP_VERSION || "1.0.0";
+  const appName = appConfig.appName;
+  const appVersion = appConfig.appVersion;
 
   return (
     <footer className="sticky bottom-0 z-30 h-16 bg-white/95 backdrop-blur-md border-t border-slate-200 px-6 flex items-center shadow-xs transition-all duration-300">
