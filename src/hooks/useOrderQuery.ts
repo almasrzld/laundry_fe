@@ -111,3 +111,42 @@ export function useUpdateOrderMutation() {
   });
 }
 
+// 6. Hook untuk memeriksa status dan bukti pembayaran (Payment Proof)
+export function usePaymentStatusQuery(orderId?: string) {
+  return useQuery<{
+    status: string;
+    paid_at?: string | null;
+    amount?: number;
+    payment_method?: string;
+    proof_image?: string | null;
+  } | null>({
+    queryKey: ['payments', 'status', orderId],
+    queryFn: async () => {
+      if (!orderId) return null;
+      try {
+        const res = await apiClient.get<any, any>(`/payments/status/${orderId}`);
+        return res || null;
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!orderId,
+  });
+}
+
+// 7. Mutation untuk Admin / Kasir mengonfirmasi pembayaran lunas
+export function useConfirmPaymentMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (orderId: string) => {
+      return await apiClient.post('/payments/confirm', { order_id: orderId });
+    },
+    onSuccess: (_, orderId) => {
+      queryClient.invalidateQueries({ queryKey: ORDER_QUERY_KEYS.all });
+      queryClient.invalidateQueries({ queryKey: ORDER_QUERY_KEYS.detail(orderId) });
+      queryClient.invalidateQueries({ queryKey: ['payments', 'status', orderId] });
+    },
+  });
+}
+

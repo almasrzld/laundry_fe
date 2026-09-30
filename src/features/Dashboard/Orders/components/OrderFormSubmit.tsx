@@ -22,6 +22,11 @@ import {
   MessageCircle,
   Star,
   Crown,
+  CreditCard,
+  CheckCircle,
+  Maximize2,
+  FileCheck,
+  Check,
 } from "lucide-react";
 import { formatRupiah, formatDate, cn, stripCountryCode } from "@/lib/utils";
 import { Badge } from "@/components/Badge";
@@ -30,9 +35,12 @@ import { ConfirmDialog, ConfirmVariant } from "@/components/ui/confirm-dialog";
 import {
   useOrderByIdQuery,
   useUpdateOrderMutation,
+  usePaymentStatusQuery,
+  useConfirmPaymentMutation,
 } from "@/hooks/useOrderQuery";
 import { useOrderStatusesQuery } from "@/hooks/useMasterQuery";
 import { useActiveUsersQuery } from "@/hooks/useUserManagementQuery";
+import { appConfig } from "@/config/app.config";
 import {
   Select,
   SelectTrigger,
@@ -59,10 +67,15 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
   const isEdit = rawAction === "edit";
 
   const { data: order, isLoading, error } = useOrderByIdQuery(effectiveOrderId);
+  const { data: paymentStatus, isLoading: isLoadingPayment } =
+    usePaymentStatusQuery(effectiveOrderId);
   const { data: masterStatuses = [] } = useOrderStatusesQuery();
   const { data: activeUsers = [], isLoading: isLoadingUsers } =
     useActiveUsersQuery();
   const updateOrderMutation = useUpdateOrderMutation();
+  const confirmPaymentMutation = useConfirmPaymentMutation();
+
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
   // Active master statuses sorted by step_order ASC
   const activeStatuses = useMemo(() => {
@@ -95,6 +108,16 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
   const [courierPhone, setCourierPhone] = useState<string>("");
   const [selectedCourierUserId, setSelectedCourierUserId] =
     useState<string>("");
+
+  const handleConfirmPayment = async () => {
+    if (!effectiveOrderId) return;
+    try {
+      await confirmPaymentMutation.mutateAsync(effectiveOrderId);
+      toast.success("Pembayaran berhasil diverifikasi & dikonfirmasi Lunas!");
+    } catch (err: any) {
+      toast.error(err.message || "Gagal mengonfirmasi pembayaran.");
+    }
+  };
 
   useEffect(() => {
     if (order) {
@@ -534,7 +557,8 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5">
                     <div className="w-12 h-12 rounded-2xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold text-base border border-sky-200 shrink-0">
-                      {(order.customer_name || order.user_name)![0].toUpperCase()}
+                      {(order.customer_name ||
+                        order.user_name)![0].toUpperCase()}
                     </div>
                     <div>
                       <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -546,7 +570,10 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                       <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 mt-1">
                         {(order.customer_phone || order.user_phone) && (
                           <div className="flex items-center gap-1.5 font-medium text-sky-700">
-                            <Phone size={12} className="text-sky-600 shrink-0" />
+                            <Phone
+                              size={12}
+                              className="text-sky-600 shrink-0"
+                            />
                             <span>
                               {order.customer_phone || order.user_phone}
                             </span>
@@ -554,7 +581,10 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                         )}
                         {(order.customer_email || order.user_email) && (
                           <div className="flex items-center gap-1.5 text-slate-500">
-                            <Mail size={12} className="text-slate-400 shrink-0" />
+                            <Mail
+                              size={12}
+                              className="text-slate-400 shrink-0"
+                            />
                             <span>
                               {order.customer_email || order.user_email}
                             </span>
@@ -581,7 +611,8 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                 </div>
               ) : (
                 <div className="text-xs text-slate-400 italic">
-                  Data akun pelanggan tidak tercatat pada sistem untuk pesanan ini.
+                  Data akun pelanggan tidak tercatat pada sistem untuk pesanan
+                  ini.
                 </div>
               )}
 
@@ -634,6 +665,157 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                     <div className="text-[10px] text-amber-700 mt-1">
                       Diulas pada {formatDate(order.rated_at)}
                     </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section: Status & Bukti Pembayaran (Manual Transfer / Proof) */}
+          <div className="space-y-3 pt-1">
+            <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <span>Informasi & Verifikasi Pembayaran</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Status pembayaran dan bukti transfer yang diunggah oleh
+                  pelanggan (Format WebP &le; 1MB):
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {paymentStatus?.status === "PAID" ? (
+                  <Badge variant="success" className="text-xs">
+                    <CheckCircle size={13} className="mr-1 inline" />
+                    Lunas
+                  </Badge>
+                ) : paymentStatus?.proof_image ? (
+                  <Badge variant="warning" className="text-xs">
+                    Menunggu Verifikasi Bukti
+                  </Badge>
+                ) : (
+                  <Badge variant="danger" className="text-xs">
+                    Belum Dibayar
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                <div className="p-3 bg-white rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block tracking-wider">
+                    Metode Pembayaran
+                  </span>
+                  <p className="text-xs font-bold text-slate-900 mt-1">
+                    {paymentStatus?.payment_method
+                      ? paymentStatus.payment_method.replace(/_/g, " ")
+                      : "-"}
+                  </p>
+                </div>
+                <div className="p-3 bg-white rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block tracking-wider">
+                    Total Nominal Tagihan
+                  </span>
+                  <p className="text-xs font-bold text-sky-700 mt-1">
+                    {formatRupiah(
+                      order.price_per_unit * order.quantity +
+                        order.delivery_fee -
+                        order.discount,
+                    )}
+                  </p>
+                </div>
+                <div className="p-3 bg-white rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block tracking-wider">
+                    Status Verifikasi
+                  </span>
+                  <p className="text-xs font-bold text-slate-900 mt-1 flex items-center gap-1.5">
+                    {paymentStatus?.status === "PAID" ? (
+                      <span className="text-emerald-700 font-bold">
+                        Terverifikasi Lunas
+                      </span>
+                    ) : paymentStatus?.proof_image ? (
+                      <span className="text-amber-700 font-bold">
+                        Menunggu Cek Admin
+                      </span>
+                    ) : (
+                      <span className="text-slate-500 font-medium">
+                        Belum Ada Bukti Bayar
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* Bukti Transfer Image & Actions */}
+              {paymentStatus?.proof_image ? (
+                <div className="p-4 bg-white border border-slate-200 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div
+                      onClick={() => setIsImageModalOpen(true)}
+                      className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 cursor-pointer group shrink-0"
+                    >
+                      <img
+                        src={`${appConfig.backendUrl}${paymentStatus.proof_image}`}
+                        alt="Bukti Transfer"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                        <Maximize2 size={16} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-900">
+                        Foto Bukti Transfer
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Gambar otomatis dikonversi ke WebP untuk performa
+                        ringan.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsImageModalOpen(true)}
+                        className="text-xs font-bold text-sky-600 hover:text-sky-700 hover:underline mt-1.5 flex items-center gap-1 cursor-pointer"
+                      >
+                        <Maximize2 size={13} />
+                        <span>Lihat Ukuran Penuh</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {paymentStatus.status !== "PAID" && (
+                    <Button
+                      type="button"
+                      onClick={handleConfirmPayment}
+                      disabled={confirmPaymentMutation.isPending}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl px-4 py-2.5 shadow-sm flex items-center gap-2 cursor-pointer"
+                    >
+                      {confirmPaymentMutation.isPending ? (
+                        <Loader2 size={15} className="animate-spin" />
+                      ) : (
+                        <Check size={15} />
+                      )}
+                      <span>Konfirmasi Pembayaran Lunas</span>
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="p-4 bg-white border border-dashed border-slate-300 rounded-xl flex items-center justify-between">
+                  <div className="text-xs text-slate-500">
+                    Pelanggan belum mengunggah foto bukti pembayaran untuk
+                    pesanan ini.
+                  </div>
+                  {paymentStatus?.status !== "PAID" && (
+                    <Button
+                      type="button"
+                      onClick={handleConfirmPayment}
+                      disabled={confirmPaymentMutation.isPending}
+                      variant="outline"
+                      className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-bold text-xs rounded-xl px-3.5 py-2 cursor-pointer"
+                    >
+                      <Check size={14} className="mr-1.5" />
+                      Konfirmasi Lunas Manual
+                    </Button>
                   )}
                 </div>
               )}
@@ -1044,6 +1226,52 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
             setConfirmDialog((prev) => ({ ...prev, isOpen: false }))
           }
         />
+      )}
+
+      {/* Modal Preview Bukti Transfer (WebP Fullscreen Preview) */}
+      {isImageModalOpen && paymentStatus?.proof_image && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setIsImageModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-lg w-full p-5 overflow-hidden shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                <FileCheck size={16} className="text-sky-600" />
+                <span>Bukti Pembayaran Pelanggan</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setIsImageModalOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+            <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-950/5 flex items-center justify-center max-h-[70vh]">
+              <img
+                src={`${appConfig.backendUrl}${paymentStatus.proof_image}`}
+                alt="Bukti Transfer Full"
+                className="w-full h-auto max-h-[65vh] object-contain rounded-lg"
+              />
+            </div>
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-[11px] text-slate-500 font-medium">
+                Format: WebP (Dikompres &le; 1MB)
+              </span>
+              <Button
+                type="button"
+                onClick={() => setIsImageModalOpen(false)}
+                className="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl px-4 py-2 cursor-pointer"
+              >
+                Tutup
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -12,6 +12,9 @@ import {
   Info,
   Clock,
   ArrowRight,
+  CreditCard,
+  AlertTriangle,
+  Gift,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -65,6 +68,22 @@ function getNotificationIcon(type: string) {
       return {
         icon: CheckCircle2,
         bgColor: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+      };
+    case 'payment_success':
+      return {
+        icon: CreditCard,
+        bgColor: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      };
+    case 'payment_expired':
+    case 'order_cancelled':
+      return {
+        icon: AlertTriangle,
+        bgColor: 'bg-rose-100 text-rose-700 border-rose-200',
+      };
+    case 'courier_tip_received':
+      return {
+        icon: Gift,
+        bgColor: 'bg-amber-100 text-amber-700 border-amber-200',
       };
     default:
       return {
