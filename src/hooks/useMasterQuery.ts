@@ -8,6 +8,10 @@ import {
   StorageShelfItem,
   PaymentMethodItem,
   OrderStatusItem,
+  OutletItem,
+  OngkirItem,
+  OngkirTierPreview,
+  CalculateOngkirResult,
 } from '../types';
 
 export const MASTER_QUERY_KEYS = {
@@ -18,6 +22,10 @@ export const MASTER_QUERY_KEYS = {
   shelves: (search?: string) => ['storage-shelves', { search }] as const,
   paymentMethods: (search?: string) => ['master', 'payment-methods', { search }] as const,
   orderStatuses: (search?: string) => ['master', 'order-statuses', { search }] as const,
+  outlets: (search?: string) => ['master', 'outlets', { search }] as const,
+  ongkirs: (search?: string) => ['master', 'ongkirs', { search }] as const,
+  ongkirNextCode: () => ['master', 'ongkirs', 'next-code'] as const,
+  ongkirPreviewTiers: (params: any) => ['master', 'ongkirs', 'preview-tiers', params] as const,
 };
 
 // ==================== 0. SHELF TYPES (JENIS RAK) ====================
@@ -300,6 +308,129 @@ export function useDeleteOrderStatusMutation() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['master', 'order-statuses'] });
+    },
+  });
+}
+
+// ==================== 7. OUTLETS (MASTER OUTLET) ====================
+export function useOutletsQuery(search?: string) {
+  return useQuery<OutletItem[]>({
+    queryKey: MASTER_QUERY_KEYS.outlets(search),
+    queryFn: async () => {
+      const q = search && search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+      const data = await apiClient.get<any, OutletItem[]>(`/master/outlets${q}`);
+      return Array.isArray(data) ? data : [];
+    },
+  });
+}
+
+export function useSaveOutletMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data, editingId }: { data: Partial<OutletItem>; editingId?: string | null }) => {
+      if (editingId) return await apiClient.put(`/master/outlets/${editingId}`, data);
+      return await apiClient.post('/master/outlets', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['master', 'outlets'] });
+      queryClient.invalidateQueries({ queryKey: ['master', 'ongkirs'] });
+    },
+  });
+}
+
+export function useDeleteOutletMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      return await apiClient.delete(`/master/outlets/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['master', 'outlets'] });
+      queryClient.invalidateQueries({ queryKey: ['master', 'ongkirs'] });
+    },
+  });
+}
+
+// ==================== 8. ONGKIRS (MASTER ONGKIR) ====================
+export function useOngkirsQuery(search?: string) {
+  return useQuery<OngkirItem[]>({
+    queryKey: MASTER_QUERY_KEYS.ongkirs(search),
+    queryFn: async () => {
+      const q = search && search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+      const data = await apiClient.get<any, OngkirItem[]>(`/master/ongkirs${q}`);
+      return Array.isArray(data) ? data : [];
+    },
+  });
+}
+
+export function useNextOngkirCodeQuery(options?: { enabled?: boolean }) {
+  return useQuery<{ code: string }>({
+    queryKey: MASTER_QUERY_KEYS.ongkirNextCode(),
+    queryFn: async () => {
+      const data = await apiClient.get<any, { code: string }>('/master/ongkirs/next-code');
+      return data;
+    },
+    enabled: options?.enabled ?? true,
+  });
+}
+
+export function useOngkirPreviewTiersQuery(params: {
+  free_radius?: number;
+  base_radius?: number;
+  base_price?: number;
+  step_radius?: number;
+  step_price?: number;
+  max_radius?: number;
+  unit_symbol?: string;
+}) {
+  return useQuery<OngkirTierPreview[]>({
+    queryKey: MASTER_QUERY_KEYS.ongkirPreviewTiers(params),
+    queryFn: async () => {
+      const sp = new URLSearchParams();
+      if (params.free_radius !== undefined) sp.set('free_radius', String(params.free_radius));
+      if (params.base_radius !== undefined) sp.set('base_radius', String(params.base_radius));
+      if (params.base_price !== undefined) sp.set('base_price', String(params.base_price));
+      if (params.step_radius !== undefined) sp.set('step_radius', String(params.step_radius));
+      if (params.step_price !== undefined) sp.set('step_price', String(params.step_price));
+      if (params.max_radius !== undefined) sp.set('max_radius', String(params.max_radius));
+      if (params.unit_symbol) sp.set('unit_symbol', params.unit_symbol);
+
+      const data = await apiClient.get<any, OngkirTierPreview[]>(`/master/ongkirs/preview-tiers?${sp.toString()}`);
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: !isNaN(Number(params.base_price)) && !isNaN(Number(params.step_price)),
+  });
+}
+
+export function useCalculateOngkirMutation() {
+  return useMutation<CalculateOngkirResult, Error, { outlets_id?: string; latitude: number; longitude: number }>({
+    mutationFn: async (payload) => {
+      return await apiClient.post<any, CalculateOngkirResult>('/master/ongkirs/calculate', payload);
+    },
+  });
+}
+
+export function useSaveOngkirMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ data, editingId }: { data: Partial<OngkirItem>; editingId?: string | null }) => {
+      if (editingId) return await apiClient.put(`/master/ongkirs/${editingId}`, data);
+      return await apiClient.post('/master/ongkirs', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['master', 'ongkirs'] });
+    },
+  });
+}
+
+export function useDeleteOngkirMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      return await apiClient.delete(`/master/ongkirs/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['master', 'ongkirs'] });
     },
   });
 }

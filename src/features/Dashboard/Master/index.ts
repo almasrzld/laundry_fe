@@ -5,3 +5,6 @@ export * from './components/PerfumesView';
 export * from './components/ServiceCategoriesView';
 export * from './components/ShelfTypesView';
 export * from './components/UnitsView';
+export * from './components/OutletsView';
+export * from './components/OngkirsView';
+
