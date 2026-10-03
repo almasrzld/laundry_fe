@@ -152,14 +152,27 @@ export interface ServiceItem {
   badge_color_hex: number;
 }
 
+export type PromoCategory = 'Event' | 'Reward Point' | string;
+export type PromoBenefitType = 'Potongan Harga' | 'Bebas Ongkir' | 'Potongan Ongkir' | string;
+export type PromoDiscountType = 'Nominal' | 'Persen' | string;
+
 export interface Promo {
   id: string;
+  id_promos?: number | string;
   title: string;
   subtitle: string;
   code: string;
+  category: PromoCategory;
+  benefit_type: PromoBenefitType;
+  discount_type: PromoDiscountType;
   discount_amount: number;
+  max_discount?: number | null;
   min_order_amount: number;
+  points_required?: number;
+  start_date: string;
+  end_date: string;
   icon_code: string;
+  color_hex?: number;
   is_active: boolean | number;
   created_at?: string;
   updated_at?: string;
