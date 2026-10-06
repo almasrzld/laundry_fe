@@ -27,6 +27,7 @@ import {
   Maximize2,
   FileCheck,
   Check,
+  Scale,
 } from "lucide-react";
 import { formatRupiah, formatDate, cn, stripCountryCode } from "@/lib/utils";
 import { Badge } from "@/components/Badge";
@@ -108,6 +109,7 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
   const [courierPhone, setCourierPhone] = useState<string>("");
   const [selectedCourierUserId, setSelectedCourierUserId] =
     useState<string>("");
+  const [actualWeight, setActualWeight] = useState<string>("");
 
   const handleConfirmPayment = async () => {
     if (!effectiveOrderId) return;
@@ -125,6 +127,9 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
         setSelectedStatusId(String(order.status_id || order.order_statuses_id));
       }
       setSelectedStatusName(order.status || "");
+      setActualWeight(
+        order.quantity && Number(order.quantity) > 0 ? String(order.quantity) : "",
+      );
       const orderCourierName = (order.courier_name || "").trim();
       const orderCourierPhone = (order.courier_phone || "").trim();
       setCourierName(orderCourierName);
@@ -315,6 +320,11 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
   const handleExecuteSave = async () => {
     if (!selectedStatusName && !selectedStatusId) return;
     try {
+      const isKiloan =
+        (order?.unit || "").toLowerCase() === "kg" ||
+        (order?.service_type || "").toLowerCase().includes("kilo");
+      const parsedWeight = parseFloat(actualWeight);
+
       await updateOrderMutation.mutateAsync({
         orderId: effectiveOrderId || order?.id || "",
         orderData: {
@@ -322,6 +332,9 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
           order_statuses_id: selectedStatusId || undefined,
           courier_name: courierName.trim(),
           courier_phone: courierPhone.trim(),
+          ...(isKiloan && !isNaN(parsedWeight) && parsedWeight > 0
+            ? { quantity: parsedWeight }
+            : {}),
         },
       });
 
@@ -340,6 +353,29 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
     e.preventDefault();
     if (!selectedStatusName && !selectedStatusId) {
       toast.error("Pilih status pengerjaan pesanan");
+      return;
+    }
+
+    const isKiloan =
+      (order?.unit || "").toLowerCase() === "kg" ||
+      (order?.service_type || "").toLowerCase().includes("kilo");
+    const parsedWeight = parseFloat(actualWeight);
+
+    // Jika status yang dipilih adalah tahap Siap Diantar / Selesai dan kiloan belum ditimbang:
+    const statusRequiresWeight =
+      selectedStatusName.toLowerCase().includes("siap") ||
+      selectedStatusName.toLowerCase().includes("selesai") ||
+      selectedStatusName.toLowerCase().includes("packing") ||
+      selectedStatusName.toLowerCase().includes("antar");
+
+    if (
+      isKiloan &&
+      statusRequiresWeight &&
+      (isNaN(parsedWeight) || parsedWeight <= 0)
+    ) {
+      toast.error(
+        "Masukkan berat aktual hasil timbangan (kg) sebelum mengubah status ke tahap siap antar atau selesai.",
+      );
       return;
     }
 
@@ -492,7 +528,9 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                   Jumlah / Satuan
                 </span>
                 <p className="font-bold text-sky-800 mt-1 text-sm">
-                  {order.quantity} {order.unit}
+                  {Number(order.quantity) > 0
+                    ? `${order.quantity} ${order.unit}`
+                    : ((order.unit || "").toLowerCase() === "kg" ? "Menunggu Timbang" : `${order.quantity} ${order.unit}`)}
                 </p>
                 <p className="text-[11px] text-slate-500 font-mono">
                   @{formatRupiah(order.price_per_unit)}/{order.unit}
@@ -504,7 +542,9 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                   Total Biaya
                 </span>
                 <p className="font-extrabold text-sky-700 mt-1 text-sm">
-                  {formatRupiah(grandTotal)}
+                  {Number(order.quantity) > 0
+                    ? formatRupiah(grandTotal)
+                    : ((order.unit || "").toLowerCase() === "kg" ? "Menunggu Timbang" : formatRupiah(grandTotal))}
                 </p>
                 <p className="text-[11px] text-emerald-600 font-medium">
                   Ongkir: {formatRupiah(order.delivery_fee)}
@@ -531,6 +571,105 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                 </p>
               </div>
             </div>
+
+            {/* Section Penimbangan Berat Cucian (Khusus Layanan Kg / Kiloan) */}
+            {((order.unit || "").toLowerCase() === "kg" || (order.service_type || "").toLowerCase().includes("kilo")) && (
+              <div className="mt-4 bg-sky-50/40 border border-sky-200 rounded-2xl p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-sky-100 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center shrink-0 border border-sky-200">
+                      <Scale size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">
+                        Penimbangan Berat Cucian (Layanan Kiloan)
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Input berat riil setelah cucian selesai dipacking untuk menetapkan total tagihan pesanan.
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    {Number(order.quantity) > 0 ? (
+                      <Badge variant="success" className="text-xs">
+                        <CheckCircle size={12} className="mr-1 inline" />
+                        Sudah Ditimbang ({order.quantity} kg)
+                      </Badge>
+                    ) : (
+                      <Badge variant="warning" className="text-xs">
+                        Menunggu Penimbangan
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {isEdit ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-center">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Berat Aktual Cucian (kg)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.1"
+                          placeholder="Masukkan berat, contoh: 3.5"
+                          value={actualWeight}
+                          onChange={(e) => setActualWeight(e.target.value)}
+                          className="w-full pl-3 pr-12 py-2.5 bg-white border border-slate-300 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 rounded-xl text-xs font-bold text-slate-900 transition-all outline-hidden"
+                        />
+                        <span className="absolute right-3.5 top-2.5 text-xs font-bold text-slate-400">
+                          kg
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Gunakan tanda titik (.) untuk nilai desimal, misal 2.75 atau 3.5.
+                      </p>
+                    </div>
+
+                    <div className="p-3.5 bg-white border border-sky-200/80 rounded-xl space-y-1.5 text-xs">
+                      <div className="flex justify-between text-slate-600">
+                        <span>Tarif Layanan:</span>
+                        <span className="font-semibold">{formatRupiah(order.price_per_unit)} / kg</span>
+                      </div>
+                      <div className="flex justify-between text-slate-600">
+                        <span>Subtotal ({parseFloat(actualWeight) || 0} kg):</span>
+                        <span className="font-bold text-slate-900">
+                          {formatRupiah((parseFloat(actualWeight) || 0) * order.price_per_unit)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-slate-600">
+                        <span>Ongkir & Diskon:</span>
+                        <span className="font-semibold text-emerald-600">
+                          +{formatRupiah(order.delivery_fee)} {order.discount > 0 ? `(-${formatRupiah(order.discount)})` : ""}
+                        </span>
+                      </div>
+                      <div className="border-t border-slate-200 pt-1.5 flex justify-between font-bold text-sky-800 text-xs">
+                        <span>Total Tagihan Baru:</span>
+                        <span>
+                          {formatRupiah(
+                            Math.max(
+                              0,
+                              (parseFloat(actualWeight) || 0) * order.price_per_unit +
+                                order.delivery_fee -
+                                order.discount,
+                            ),
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+                    <span className="text-slate-600 font-medium">Hasil Timbangan Cucian:</span>
+                    <span className="font-bold text-slate-900">
+                      {Number(order.quantity) > 0 ? `${order.quantity} kg` : "Belum diinput petugas laundry"}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Section: Informasi Pemesan / Pelanggan */}
