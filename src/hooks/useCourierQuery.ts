@@ -31,7 +31,32 @@ export const COURIER_QUERY_KEYS = {
   all: ['couriers'] as const,
   summary: ['couriers', 'summary'] as const,
   tasks: (params?: any) => ['couriers', 'tasks', params] as const,
+  withdrawals: (params?: any) => ['couriers', 'withdrawals', params] as const,
 };
+
+export interface WithdrawalRequest {
+  id: string;
+  id_withdrawal_requests: number;
+  users_id: number;
+  user_id: string;
+  user_name: string;
+  user_phone: string;
+  user_email: string;
+  role_code: string;
+  role_name?: string;
+  amount: number;
+  bank_name: string;
+  account_number: string;
+  account_name: string;
+  status: 'pending' | 'completed' | 'rejected';
+  admin_notes?: string | null;
+  proof_image?: string | null;
+  processed_by?: number | null;
+  processor_name?: string | null;
+  processed_at?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+}
 
 export function useCouriersQuery() {
   return useQuery<CourierUser[]>({
@@ -85,6 +110,43 @@ export function useUpdateCourierTaskStatusMutation() {
       queryClient.invalidateQueries({ queryKey: COURIER_QUERY_KEYS.summary });
       queryClient.invalidateQueries({ queryKey: ['couriers', 'tasks'] });
       queryClient.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
+}
+
+export function useWithdrawalsQuery(params?: { status?: string; search?: string }) {
+  return useQuery<WithdrawalRequest[]>({
+    queryKey: COURIER_QUERY_KEYS.withdrawals(params),
+    queryFn: async () => {
+      const data = await apiClient.get<any, WithdrawalRequest[]>('/system/withdrawals', { params });
+      return Array.isArray(data) ? data : [];
+    },
+  });
+}
+
+export function useUpdateWithdrawalStatusMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      withdrawalId,
+      status,
+      adminNotes,
+    }: {
+      withdrawalId: string;
+      status: 'completed' | 'rejected';
+      adminNotes?: string;
+    }) => {
+      return await apiClient.put(`/system/withdrawals/${encodeURIComponent(withdrawalId)}/status`, {
+        status,
+        admin_notes: adminNotes,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['couriers', 'withdrawals'] });
+      queryClient.invalidateQueries({ queryKey: COURIER_QUERY_KEYS.all });
+      queryClient.invalidateQueries({ queryKey: COURIER_QUERY_KEYS.summary });
+      queryClient.invalidateQueries({ queryKey: ['system-users'] });
     },
   });
 }

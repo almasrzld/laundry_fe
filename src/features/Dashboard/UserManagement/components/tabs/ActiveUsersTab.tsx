@@ -13,6 +13,9 @@ import {
   EyeOff,
   Save,
   Loader2,
+  Wallet,
+  X,
+  PlusCircle,
 } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
 import { useDebounce } from "use-debounce";
@@ -42,6 +45,7 @@ import {
   useSystemRolesQuery,
   useSaveUserMutation,
   useDeleteUserMutation,
+  useTopupUserBalanceMutation,
 } from "@/hooks/useUserManagementQuery";
 
 export const ActiveUsersTab: React.FC = () => {
@@ -56,8 +60,15 @@ export const ActiveUsersTab: React.FC = () => {
 
   const saveUserMutation = useSaveUserMutation();
   const deleteUserMutation = useDeleteUserMutation();
+  const topupUserBalanceMutation = useTopupUserBalanceMutation();
 
   const [editingUser, setEditingUser] = useState<SystemUser | null>(null);
+
+  // Top-Up Modal State
+  const [topupUser, setTopupUser] = useState<SystemUser | null>(null);
+  const [topupAmount, setTopupAmount] = useState<string>("");
+  const [topupNotes, setTopupNotes] = useState<string>("");
+  const [topupRefNo, setTopupRefNo] = useState<string>("");
 
   const userValidationSchema = useMemo(
     () => createUserFormSchema(activeUsers, editingUser?.id),
@@ -167,6 +178,7 @@ export const ActiveUsersTab: React.FC = () => {
   };
 
   const handleEditUser = (u: SystemUser) => {
+    setTopupUser(null);
     setEditingUser(u);
     userForm.reset({
       name: u.name,
@@ -211,6 +223,47 @@ export const ActiveUsersTab: React.FC = () => {
         }
       },
     });
+  };
+
+  const handleOpenTopup = (u: SystemUser) => {
+    setEditingUser(null);
+    setTopupUser(u);
+    setTopupAmount("");
+    setTopupNotes("");
+    setTopupRefNo("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleCloseTopup = () => {
+    setTopupUser(null);
+    setTopupAmount("");
+    setTopupNotes("");
+    setTopupRefNo("");
+  };
+
+  const handleSubmitTopup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!topupUser) return;
+    const numAmount = parseInt(topupAmount.replace(/[^0-9]/g, ""), 10);
+    if (!numAmount || numAmount <= 0) {
+      toast.error("Nominal top-up harus lebih dari 0!");
+      return;
+    }
+
+    try {
+      await topupUserBalanceMutation.mutateAsync({
+        userId: topupUser.id,
+        amount: numAmount,
+        notes: topupNotes.trim() || undefined,
+        referenceNo: topupRefNo.trim() || undefined,
+      });
+      toast.success(
+        `Top-Up berhasil! Saldo ${formatRupiah(numAmount)} telah ditambahkan ke akun ${topupUser.name}.`,
+      );
+      handleCloseTopup();
+    } catch (err: any) {
+      toast.error(err.message || "Gagal melakukan top-up saldo.");
+    }
   };
 
   const filteredActiveUsers = useMemo(() => {
@@ -312,6 +365,13 @@ export const ActiveUsersTab: React.FC = () => {
           return (
             <div className="flex items-center justify-end gap-1.5">
               <button
+                onClick={() => handleOpenTopup(u)}
+                title="Top-Up Saldo LaundryPay"
+                className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+              >
+                <Wallet size={15} />
+              </button>
+              <button
                 onClick={() => handleEditUser(u)}
                 title="Edit Pengguna"
                 className="p-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
@@ -336,273 +396,400 @@ export const ActiveUsersTab: React.FC = () => {
 
   return (
     <div className="space-y-4 pt-2">
-      {/* Form Tambah/Edit User Langsung Ditampilkan di Atas */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 mb-4 shadow-2xs">
-        {editingUser && (
-          <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-100 text-xs">
+      {/* Form Inline Top-Up Saldo ATAU Form Tambah/Edit User */}
+      {topupUser ? (
+        <div className="bg-white border border-emerald-200 rounded-xl p-4 mb-4 shadow-2xs animate-in fade-in duration-200">
+          <div className="flex items-center justify-between pb-2 mb-3 border-b border-emerald-100 text-xs">
             <span className="font-semibold text-slate-700">
-              Mode Edit:{" "}
-              <strong className="text-blue-600">{editingUser.name}</strong>
+              Mode Top-Up Saldo:{" "}
+              <strong className="text-emerald-700">{topupUser.name}</strong>{" "}
+              <span className="text-slate-500 font-normal">({topupUser.email})</span> — Saldo Saat Ini:{" "}
+              <strong className="text-slate-900">
+                {formatRupiah(topupUser.laundry_pay_balance || 0)}
+              </strong>
             </span>
             <button
               type="button"
-              onClick={handleCancelEdit}
+              onClick={handleCloseTopup}
               className="text-xs text-rose-500 hover:text-rose-700 font-medium cursor-pointer"
             >
-              Batalkan Edit
+              Batalkan Top-Up
             </button>
           </div>
-        )}
-        <form
-          onSubmit={userForm.handleSubmit(onSubmitUser)}
-          className="space-y-4 text-xs"
-        >
-          <div
-            className={cn(
-              "grid grid-cols-1 sm:grid-cols-2 gap-3",
-              editingUser
-                ? "md:grid-cols-3 lg:grid-cols-6"
-                : "md:grid-cols-3 lg:grid-cols-5",
-            )}
-          >
-            {/* Nama Lengkap */}
-            <div>
-              <label className="block text-xs font-bold text-slate-900 mb-1">
-                Nama Lengkap <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                {...userForm.register("name")}
-                placeholder="Nama Lengkap"
-                className={cn(
-                  "w-full bg-white border rounded-md px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none transition-colors",
-                  userForm.formState.errors.name
-                    ? "border-rose-400 focus:border-rose-500 bg-rose-50/30"
-                    : "border-slate-300 focus:border-blue-500",
-                )}
-              />
-              {userForm.formState.errors.name && (
-                <p className="text-[10px] text-rose-500 font-medium mt-1">
-                  {userForm.formState.errors.name.message}
-                </p>
-              )}
-            </div>
 
-            {/* Email */}
+          <form onSubmit={handleSubmitTopup} className="space-y-3.5 text-xs">
+            {/* Quick Chips */}
             <div>
-              <label className="block text-xs font-bold text-slate-900 mb-1">
-                Email <span className="text-rose-500">*</span>
+              <label className="block text-xs font-bold text-slate-900 mb-1.5">
+                Pilih Nominal Cepat
               </label>
-              <input
-                type="email"
-                {...userForm.register("email")}
-                placeholder="Email"
-                className={cn(
-                  "w-full bg-white border rounded-md px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none transition-colors",
-                  userForm.formState.errors.email
-                    ? "border-rose-400 focus:border-rose-500 bg-rose-50/30"
-                    : "border-slate-300 focus:border-blue-500",
-                )}
-              />
-              {userForm.formState.errors.email && (
-                <p className="text-[10px] text-rose-500 font-medium mt-1">
-                  {userForm.formState.errors.email.message}
-                </p>
-              )}
-            </div>
-
-            {/* No Telepon */}
-            <div>
-              <label className="block text-xs font-bold text-slate-900 mb-1">
-                No. HP / WA <span className="text-rose-500">*</span>
-              </label>
-              <Controller
-                control={userForm.control}
-                name="phone"
-                render={({ field }) => (
-                  <div
-                    className={cn(
-                      "flex items-center w-full bg-white border rounded-md overflow-hidden transition-colors h-[34px]",
-                      userForm.formState.errors.phone
-                        ? "border-rose-400 focus-within:border-rose-500 bg-rose-50/30"
-                        : "border-slate-300 focus-within:border-blue-500",
-                    )}
-                  >
-                    <span className="pl-3 pr-1 text-xs text-slate-800 font-normal select-none shrink-0">
-                      +62
-                    </span>
-                    <input
-                      type="text"
-                      value={stripCountryCode(field.value || "")}
-                      onChange={(e) => {
-                        const stripped = stripCountryCode(e.target.value);
-                        field.onChange(stripped ? `+62 ${stripped}` : "");
-                      }}
-                      placeholder="812-xxxx-xxxx"
-                      className="w-full bg-transparent pr-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
-                    />
-                  </div>
-                )}
-              />
-              {userForm.formState.errors.phone && (
-                <p className="text-[10px] text-rose-500 font-medium mt-1">
-                  {userForm.formState.errors.phone.message}
-                </p>
-              )}
-            </div>
-
-            {/* Password (Hanya tampil saat Edit User) */}
-            {editingUser && (
-              <div>
-                <label className="block text-xs font-bold text-slate-900 mb-1">
-                  Password{" "}
-                  <span className="text-slate-500 font-normal">(Opsional)</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type={showUserPassword ? "text" : "password"}
-                    {...userForm.register("password")}
-                    placeholder="Kosongkan jika tidak diubah"
-                    className={cn(
-                      "w-full bg-white border rounded-md pl-3 pr-8 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none transition-colors",
-                      userForm.formState.errors.password
-                        ? "border-rose-400 focus:border-rose-500 bg-rose-50/30"
-                        : "border-slate-300 focus:border-blue-500",
-                    )}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowUserPassword(!showUserPassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                    title={
-                      showUserPassword
-                        ? "Sembunyikan password"
-                        : "Tampilkan password"
-                    }
-                  >
-                    {showUserPassword ? (
-                      <EyeOff size={14} />
-                    ) : (
-                      <Eye size={14} />
-                    )}
-                  </button>
-                </div>
-                {userForm.formState.errors.password && (
-                  <p className="text-[10px] text-rose-500 font-medium mt-1">
-                    {userForm.formState.errors.password.message}
-                  </p>
+              <div className="flex flex-wrap gap-2">
+                {[20000, 50000, 100000, 200000, 500000, 1000000].map(
+                  (nominal) => (
+                    <button
+                      key={nominal}
+                      type="button"
+                      onClick={() => setTopupAmount(nominal.toString())}
+                      className={cn(
+                        "py-1 px-2.5 text-xs font-semibold rounded-md border transition-all cursor-pointer",
+                        topupAmount === nominal.toString()
+                          ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                          : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100",
+                      )}
+                    >
+                      {formatRupiah(nominal)}
+                    </button>
+                  ),
                 )}
               </div>
-            )}
-
-            {/* Role */}
-            <div>
-              <label className="block text-xs font-bold text-slate-900 mb-1">
-                Role <span className="text-rose-500">*</span>
-              </label>
-              <Controller
-                control={userForm.control}
-                name="role_code"
-                render={({ field }) => (
-                  <Select
-                    key={field.value || "empty"}
-                    value={field.value || "customer"}
-                    onValueChange={field.onChange}
-                  >
-                    <SelectTrigger
-                      clearable={Boolean(field.value)}
-                      onClear={() => field.onChange("customer")}
-                      className="w-full bg-white border-slate-300 rounded-md px-3 py-2 text-xs text-slate-800 h-[34px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-none"
-                    >
-                      <SelectValue
-                        placeholder={
-                          roles.length === 0
-                            ? "Tidak ada pilihan data"
-                            : "Pilih Role"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {roles.length === 0 ? (
-                        <div className="py-2.5 px-3 text-center text-xs text-slate-400 italic select-none">
-                          Tidak ada pilihan data
-                        </div>
-                      ) : (
-                        roles.map((r) => (
-                          <SelectItem key={r.code} value={r.code}>
-                            {r.name}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
             </div>
 
-            {/* Status */}
-            <div>
-              <label className="block text-xs font-bold text-slate-900 mb-1">
-                Status
-              </label>
-              <Controller
-                control={userForm.control}
-                name="status"
-                render={({ field }) => (
-                  <Select
-                    key={field.value || "empty"}
-                    value={field.value || "active"}
-                    onValueChange={field.onChange}
-                  >
-                    <SelectTrigger
-                      clearable={Boolean(field.value)}
-                      onClear={() => field.onChange("active")}
-                      className="w-full bg-white border-slate-300 rounded-md px-3 py-2 text-xs text-slate-800 h-[34px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-none"
-                    >
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </div>
-          </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {/* Input Nominal Kustom */}
+              <div>
+                <label className="block text-xs font-bold text-slate-900 mb-1">
+                  Nominal Top-Up (Rp) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="1000"
+                  step="1000"
+                  value={topupAmount}
+                  onChange={(e) => setTopupAmount(e.target.value)}
+                  placeholder="Nominal Top-Up (Rp)"
+                  className="w-full px-3 py-2 text-xs text-slate-900 bg-white border border-slate-300 rounded-md focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 h-[34px]"
+                  required
+                />
+              </div>
 
-          {/* Tombol Simpan */}
-          <div className="pt-1 flex items-center gap-2">
-            <Button
-              type="submit"
-              disabled={saveUserMutation.isPending}
-              className="inline-flex items-center gap-2 px-4 py-2 h-[34px] bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-xs font-medium rounded-md shadow-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
-            >
-              {saveUserMutation.isPending ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>Menyimpan...</span>
-                </>
-              ) : (
-                <>
-                  <Save size={14} />
-                  <span>{editingUser ? "Simpan Perubahan" : "Simpan"}</span>
-                </>
-              )}
-            </Button>
-            {editingUser && (
+              {/* No. Referensi / Kasir / Bukti */}
+              <div>
+                <label className="block text-xs font-bold text-slate-900 mb-1">
+                  No. Referensi / Kasir{" "}
+                  <span className="text-slate-400 font-normal">(Opsional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={topupRefNo}
+                  onChange={(e) => setTopupRefNo(e.target.value)}
+                  placeholder="No. Referensi / Kasir"
+                  className="w-full px-3 py-2 text-xs text-slate-900 bg-white border border-slate-300 rounded-md focus:outline-none focus:border-emerald-500 h-[34px]"
+                />
+              </div>
+
+              {/* Catatan Top-Up */}
+              <div>
+                <label className="block text-xs font-bold text-slate-900 mb-1">
+                  Catatan Admin{" "}
+                  <span className="text-slate-400 font-normal">(Opsional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={topupNotes}
+                  onChange={(e) => setTopupNotes(e.target.value)}
+                  placeholder="Catatan Admin"
+                  className="w-full px-3 py-2 text-xs text-slate-900 bg-white border border-slate-300 rounded-md focus:outline-none focus:border-emerald-500 h-[34px]"
+                />
+              </div>
+            </div>
+
+            {/* Tombol Simpan Top-Up */}
+            <div className="pt-1 flex items-center gap-2">
+              <Button
+                type="submit"
+                disabled={
+                  topupUserBalanceMutation.isPending || !topupAmount
+                }
+                className="inline-flex items-center gap-2 px-4 py-2 h-[34px] bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-xs font-medium rounded-md shadow-xs transition-colors cursor-pointer"
+              >
+                {topupUserBalanceMutation.isPending ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Memproses...</span>
+                  </>
+                ) : (
+                  <span>Proses Top-Up Saldo</span>
+                )}
+              </Button>
               <Button
                 type="button"
                 variant="secondary"
-                onClick={handleCancelEdit}
+                onClick={handleCloseTopup}
                 className="px-3 py-2 h-[34px] bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-md transition-colors cursor-pointer"
               >
                 Batal
               </Button>
-            )}
-          </div>
-        </form>
-      </div>
+            </div>
+          </form>
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-xl p-4 mb-4 shadow-2xs">
+          {editingUser && (
+            <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-100 text-xs">
+              <span className="font-semibold text-slate-700">
+                Mode Edit:{" "}
+                <strong className="text-blue-600">{editingUser.name}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="text-xs text-rose-500 hover:text-rose-700 font-medium cursor-pointer"
+              >
+                Batalkan Edit
+              </button>
+            </div>
+          )}
+          <form
+            onSubmit={userForm.handleSubmit(onSubmitUser)}
+            className="space-y-4 text-xs"
+          >
+            <div
+              className={cn(
+                "grid grid-cols-1 sm:grid-cols-2 gap-3",
+                editingUser
+                  ? "md:grid-cols-3 lg:grid-cols-6"
+                  : "md:grid-cols-3 lg:grid-cols-5",
+              )}
+            >
+              {/* Nama Lengkap */}
+              <div>
+                <label className="block text-xs font-bold text-slate-900 mb-1">
+                  Nama Lengkap <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  {...userForm.register("name")}
+                  placeholder="Nama Lengkap"
+                  className={cn(
+                    "w-full bg-white border rounded-md px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none transition-colors",
+                    userForm.formState.errors.name
+                      ? "border-rose-400 focus:border-rose-500 bg-rose-50/30"
+                      : "border-slate-300 focus:border-blue-500",
+                  )}
+                />
+                {userForm.formState.errors.name && (
+                  <p className="text-[10px] text-rose-500 font-medium mt-1">
+                    {userForm.formState.errors.name.message}
+                  </p>
+                )}
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-xs font-bold text-slate-900 mb-1">
+                  Email <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  {...userForm.register("email")}
+                  placeholder="Email"
+                  className={cn(
+                    "w-full bg-white border rounded-md px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none transition-colors",
+                    userForm.formState.errors.email
+                      ? "border-rose-400 focus:border-rose-500 bg-rose-50/30"
+                      : "border-slate-300 focus:border-blue-500",
+                  )}
+                />
+                {userForm.formState.errors.email && (
+                  <p className="text-[10px] text-rose-500 font-medium mt-1">
+                    {userForm.formState.errors.email.message}
+                  </p>
+                )}
+              </div>
+
+              {/* No Telepon */}
+              <div>
+                <label className="block text-xs font-bold text-slate-900 mb-1">
+                  No. HP / WA <span className="text-rose-500">*</span>
+                </label>
+                <Controller
+                  control={userForm.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <div
+                      className={cn(
+                        "flex items-center w-full bg-white border rounded-md overflow-hidden transition-colors h-[34px]",
+                        userForm.formState.errors.phone
+                          ? "border-rose-400 focus-within:border-rose-500 bg-rose-50/30"
+                          : "border-slate-300 focus-within:border-blue-500",
+                      )}
+                    >
+                      <span className="pl-3 pr-1 text-xs text-slate-800 font-normal select-none shrink-0">
+                        +62
+                      </span>
+                      <input
+                        type="text"
+                        value={stripCountryCode(field.value || "")}
+                        onChange={(e) => {
+                          const stripped = stripCountryCode(e.target.value);
+                          field.onChange(stripped ? `+62 ${stripped}` : "");
+                        }}
+                        placeholder="No. HP / WA"
+                        className="w-full bg-transparent pr-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none"
+                      />
+                    </div>
+                  )}
+                />
+                {userForm.formState.errors.phone && (
+                  <p className="text-[10px] text-rose-500 font-medium mt-1">
+                    {userForm.formState.errors.phone.message}
+                  </p>
+                )}
+              </div>
+
+              {/* Password (Hanya tampil saat Edit User) */}
+              {editingUser && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-900 mb-1">
+                    Password{" "}
+                    <span className="text-slate-500 font-normal">(Opsional)</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showUserPassword ? "text" : "password"}
+                      {...userForm.register("password")}
+                      placeholder="Password"
+                      className={cn(
+                        "w-full bg-white border rounded-md pl-3 pr-8 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none transition-colors",
+                        userForm.formState.errors.password
+                          ? "border-rose-400 focus:border-rose-500 bg-rose-50/30"
+                          : "border-slate-300 focus:border-blue-500",
+                      )}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowUserPassword(!showUserPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                      title={
+                        showUserPassword
+                          ? "Sembunyikan password"
+                          : "Tampilkan password"
+                      }
+                    >
+                      {showUserPassword ? (
+                        <EyeOff size={14} />
+                      ) : (
+                        <Eye size={14} />
+                      )}
+                    </button>
+                  </div>
+                  {userForm.formState.errors.password && (
+                    <p className="text-[10px] text-rose-500 font-medium mt-1">
+                      {userForm.formState.errors.password.message}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Role */}
+              <div>
+                <label className="block text-xs font-bold text-slate-900 mb-1">
+                  Role <span className="text-rose-500">*</span>
+                </label>
+                <Controller
+                  control={userForm.control}
+                  name="role_code"
+                  render={({ field }) => (
+                    <Select
+                      key={field.value || "empty"}
+                      value={field.value || "customer"}
+                      onValueChange={field.onChange}
+                    >
+                      <SelectTrigger
+                        clearable={Boolean(field.value)}
+                        onClear={() => field.onChange("customer")}
+                        className="w-full bg-white border-slate-300 rounded-md px-3 py-2 text-xs text-slate-800 h-[34px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-none"
+                      >
+                        <SelectValue
+                          placeholder={
+                            roles.length === 0
+                              ? "Tidak ada pilihan data"
+                              : "Pilih Role"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {roles.length === 0 ? (
+                          <div className="py-2.5 px-3 text-center text-xs text-slate-400 italic select-none">
+                            Tidak ada pilihan data
+                          </div>
+                        ) : (
+                          roles.map((r) => (
+                            <SelectItem key={r.code} value={r.code}>
+                              {r.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="block text-xs font-bold text-slate-900 mb-1">
+                  Status
+                </label>
+                <Controller
+                  control={userForm.control}
+                  name="status"
+                  render={({ field }) => (
+                    <Select
+                      key={field.value || "empty"}
+                      value={field.value || "active"}
+                      onValueChange={field.onChange}
+                    >
+                      <SelectTrigger
+                        clearable={Boolean(field.value)}
+                        onClear={() => field.onChange("active")}
+                        className="w-full bg-white border-slate-300 rounded-md px-3 py-2 text-xs text-slate-800 h-[34px] focus:ring-1 focus:ring-blue-500 focus:border-blue-500 shadow-none"
+                      >
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Tombol Simpan */}
+            <div className="pt-1 flex items-center gap-2">
+              <Button
+                type="submit"
+                disabled={saveUserMutation.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2 h-[34px] bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-xs font-medium rounded-md shadow-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
+              >
+                {saveUserMutation.isPending ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save size={14} />
+                    <span>{editingUser ? "Simpan Perubahan" : "Simpan"}</span>
+                  </>
+                )}
+              </Button>
+              {editingUser && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCancelEdit}
+                  className="px-3 py-2 h-[34px] bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-md transition-colors cursor-pointer"
+                >
+                  Batal
+                </Button>
+              )}
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Search & Role Filter Bar with Debounce */}
       <div className="flex flex-col sm:flex-row items-center gap-3">

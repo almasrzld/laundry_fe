@@ -383,6 +383,7 @@ export const PaymentMethodsView: React.FC = () => {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="cash">Tunai (Cash)</SelectItem>
+                        <SelectItem value="laundrypay">LaundryPay (Saldo Dompet)</SelectItem>
                         <SelectItem value="qris">QRIS Barcode</SelectItem>
                         <SelectItem value="bank_transfer">
                           Transfer Bank
@@ -526,6 +527,7 @@ export const PaymentMethodsView: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Semua Tipe</SelectItem>
+                  <SelectItem value="laundrypay">LaundryPay</SelectItem>
                   <SelectItem value="cash">Tunai (Cash)</SelectItem>
                   <SelectItem value="qris">QRIS</SelectItem>
                   <SelectItem value="bank_transfer">Transfer Bank</SelectItem>

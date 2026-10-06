@@ -15,6 +15,8 @@ import {
   CreditCard,
   AlertTriangle,
   Gift,
+  Wallet,
+  Banknote,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -65,15 +67,39 @@ function getNotificationIcon(type: string) {
         bgColor: 'bg-amber-100 text-amber-700 border-amber-200',
       };
     case 'order_completed':
+    case 'withdrawal_completed':
       return {
         icon: CheckCircle2,
-        bgColor: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-      };
-    case 'payment_success':
-      return {
-        icon: CreditCard,
         bgColor: 'bg-emerald-100 text-emerald-700 border-emerald-200',
       };
+    case 'payment_success':
+    case 'topup_success':
+      return {
+        icon: Wallet,
+        bgColor: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      };
+    case 'topup_requested':
+      return {
+        icon: Wallet,
+        bgColor: 'bg-amber-100 text-amber-700 border-amber-200',
+      };
+    case 'topup_submitted':
+      return {
+        icon: Clock,
+        bgColor: 'bg-sky-100 text-sky-700 border-sky-200',
+      };
+    case 'withdrawal_requested':
+      return {
+        icon: Banknote,
+        bgColor: 'bg-amber-100 text-amber-700 border-amber-200',
+      };
+    case 'withdrawal_submitted':
+      return {
+        icon: Clock,
+        bgColor: 'bg-sky-100 text-sky-700 border-sky-200',
+      };
+    case 'topup_rejected':
+    case 'withdrawal_rejected':
     case 'payment_expired':
     case 'order_cancelled':
       return {
@@ -113,6 +139,10 @@ export const NotificationDropdown: React.FC = () => {
     if (notif.order_id || notif.orders_id) {
       const orderParam = String(notif.order_id || notif.orders_id);
       router.push(`/order/${encodeURIComponent(orderParam)}/edit`);
+    } else if (notif.type === 'withdrawal_requested' || notif.type?.startsWith('withdrawal_')) {
+      router.push('/courier');
+    } else if (notif.type === 'topup_requested' || notif.type?.startsWith('topup_')) {
+      router.push('/system/user-management');
     }
   };
 
@@ -258,11 +288,11 @@ export const NotificationDropdown: React.FC = () => {
               type="button"
               onClick={() => {
                 setIsOpen(false);
-                router.push('/order');
+                router.push('/notifications');
               }}
               className="w-full py-1.5 text-[11px] font-bold text-sky-700 hover:text-sky-800 flex items-center justify-center gap-1 cursor-pointer transition-colors"
             >
-              <span>Lihat Semua Pesanan</span>
+              <span>Lihat Semua Notifikasi</span>
               <ArrowRight size={12} />
             </button>
           </div>
