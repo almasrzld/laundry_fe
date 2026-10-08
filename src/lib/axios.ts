@@ -1,7 +1,60 @@
 import axios, { AxiosError } from 'axios';
-import { getApiBaseUrl } from './api';
 import { getCookie } from './cookies';
-import { useAuthStore, TOKEN_COOKIE } from '../store/useAuthStore';
+import { getApiBaseUrl } from './api';
+import { useAuthStore, TOKEN_COOKIE } from '@/store/useAuthStore';
+
+let cachedGps: { lat: number; lng: number } | null = null;
+
+export const requestBrowserGeolocation = (): void => {
+  if (typeof window !== 'undefined' && 'geolocation' in navigator) {
+    // 1. Dapatkan posisi GPS seketika
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        cachedGps = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        };
+        try {
+          sessionStorage.setItem('almas_user_gps', JSON.stringify(cachedGps));
+          localStorage.setItem('almas_user_gps', JSON.stringify(cachedGps));
+        } catch (_) {}
+      },
+      (err) => {
+        console.debug('Geolocation request:', err?.message);
+      },
+      { timeout: 10000, enableHighAccuracy: true, maximumAge: 0 }
+    );
+
+    // 2. Pantau pergerakan / koordinat GPS real-time secara berkelanjutan
+    try {
+      navigator.geolocation.watchPosition(
+        (pos) => {
+          cachedGps = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          };
+          try {
+            sessionStorage.setItem('almas_user_gps', JSON.stringify(cachedGps));
+            localStorage.setItem('almas_user_gps', JSON.stringify(cachedGps));
+          } catch (_) {}
+        },
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 5000 }
+      );
+    } catch (_) {}
+  }
+};
+
+// Initial trigger in browser environment
+if (typeof window !== 'undefined') {
+  try {
+    const saved = sessionStorage.getItem('almas_user_gps') || localStorage.getItem('almas_user_gps');
+    if (saved) {
+      cachedGps = JSON.parse(saved);
+    }
+  } catch (_) {}
+  requestBrowserGeolocation();
+}
 
 export const apiClient = axios.create({
   baseURL: getApiBaseUrl(),
@@ -11,7 +64,7 @@ export const apiClient = axios.create({
   timeout: 15000,
 });
 
-// Request interceptor: attach token or dynamic baseURL update if needed
+// Request interceptor: attach token, GPS coordinates, and dynamic baseURL
 apiClient.interceptors.request.use(
   (config) => {
     // Dynamically ensure latest baseURL in browser environment
@@ -20,6 +73,23 @@ apiClient.interceptors.request.use(
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Attach GPS coordinates if available
+    if (config.headers) {
+      if (!cachedGps && typeof window !== 'undefined') {
+        try {
+          const saved = sessionStorage.getItem('almas_user_gps');
+          if (saved) cachedGps = JSON.parse(saved);
+        } catch (_) {}
+      }
+
+      if (cachedGps) {
+        config.headers['x-latitude'] = String(cachedGps.lat);
+        config.headers['x-longitude'] = String(cachedGps.lng);
+        config.headers['x-client-location'] = `GPS (${cachedGps.lat.toFixed(5)}, ${cachedGps.lng.toFixed(5)})`;
+      }
+    }
+
     return config;
   },
   (error) => Promise.reject(error)

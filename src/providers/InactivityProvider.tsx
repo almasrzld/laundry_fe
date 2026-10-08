@@ -17,10 +17,10 @@ import {
   SessionExpiredReason,
 } from "@/components/ui/session-expired-dialog";
 
-// Interval pengecekan status inaktivitas (setiap 5 detik)
+// Interval pengecekan status inaktivitas lokal (setiap 5 detik)
 const CHECK_INTERVAL_MS = 5 * 1000;
-// Interval verifikasi sesi ke server backend (setiap 10 detik)
-const SERVER_SESSION_CHECK_INTERVAL_MS = 10 * 1000;
+// Interval verifikasi sesi ke server backend (setiap 60 detik)
+const SERVER_SESSION_CHECK_INTERVAL_MS = 60 * 1000;
 // Throttle perekaman aktivitas pengguna
 const ACTIVITY_THROTTLE_MS = 5 * 1000;
 // Ambang peringatan sebelum auto-logout inaktivitas (60 detik)
@@ -256,8 +256,10 @@ export const InactivityProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     // Jalankan pengecekan inaktivitas & verifikasi server saat route berubah / komponen mount
-    checkAuthAndInactivity();
-    verifyServerSession();
+    const timer = setTimeout(() => {
+      checkAuthAndInactivity();
+      verifyServerSession();
+    }, 0);
 
     // Event listener untuk custom event session-expired (dari axios interceptor atau apiFetch)
     const handleCustomSessionExpired = (e: any) => {
@@ -355,6 +357,7 @@ export const InactivityProvider: React.FC<{ children: React.ReactNode }> = ({
       });
       clearInterval(inactivityTimer);
       clearInterval(sessionHeartbeatTimer);
+      clearTimeout(timer);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("storage", handleStorageSync);
