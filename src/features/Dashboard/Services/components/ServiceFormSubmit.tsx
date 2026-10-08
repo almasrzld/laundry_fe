@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { ArrowLeft, Save, Search, ExternalLink, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Search, ExternalLink, Sparkles, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DynamicIcon } from "@/components/DynamicIcon";
@@ -743,9 +743,10 @@ export const ServiceFormSubmit: React.FC<ServiceFormSubmitProps> = ({
                       <button
                         type="button"
                         onClick={() => setIconSearchQuery("")}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 flex items-center justify-center p-0.5"
+                        aria-label="Hapus pencarian"
                       >
-                        ✕
+                        <X size={14} />
                       </button>
                     )}
                   </div>

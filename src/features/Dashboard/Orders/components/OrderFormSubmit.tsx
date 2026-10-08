@@ -111,6 +111,31 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
     useState<string>("");
   const [actualWeight, setActualWeight] = useState<string>("");
 
+  const isKiloan = useMemo(() => {
+    if (!order) return false;
+    return (
+      (order.unit || "").toLowerCase() === "kg" ||
+      (order.service_type || "").toLowerCase().includes("kilo")
+    );
+  }, [order]);
+
+  const isWaitingWeighing = useMemo(() => {
+    return isKiloan && Number(order?.quantity || 0) <= 0;
+  }, [isKiloan, order]);
+
+  const isOrderPaid = useMemo(() => {
+    if (isWaitingWeighing) return false;
+    if (paymentStatus?.status === "PAID") return true;
+    const notesLower = (order?.notes || "").toLowerCase();
+    return (
+      !isKiloan &&
+      (notesLower.includes("[lunas via") ||
+        notesLower.includes("[lunas]") ||
+        notesLower.includes("(diverifikasi admin)") ||
+        notesLower.includes("lunas (voucher & poin)"))
+    );
+  }, [isWaitingWeighing, paymentStatus, order, isKiloan]);
+
   const handleConfirmPayment = async () => {
     if (!effectiveOrderId) return;
     try {
@@ -823,7 +848,12 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {paymentStatus?.status === "PAID" ? (
+                {isWaitingWeighing ? (
+                  <Badge variant="warning" className="text-xs">
+                    <Scale size={13} className="mr-1 inline" />
+                    Menunggu Penimbangan
+                  </Badge>
+                ) : isOrderPaid ? (
                   <Badge variant="success" className="text-xs">
                     <CheckCircle size={13} className="mr-1 inline" />
                     Lunas
@@ -849,7 +879,13 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                   <p className="text-xs font-bold text-slate-900 mt-1">
                     {paymentStatus?.payment_method
                       ? paymentStatus.payment_method.replace(/_/g, " ")
-                      : "-"}
+                      : (order?.notes || "").toLowerCase().includes("qris")
+                        ? "QRIS"
+                        : (order?.notes || "").toLowerCase().includes("laundrypay")
+                          ? "Saldo LaundryPay"
+                          : (order?.notes || "").toLowerCase().includes("tunai") || (order?.notes || "").toLowerCase().includes("cod")
+                            ? "Tunai / COD"
+                            : "-"}
                   </p>
                 </div>
                 <div className="p-3 bg-white rounded-xl border border-slate-200">
@@ -869,7 +905,11 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                     Status Verifikasi
                   </span>
                   <p className="text-xs font-bold text-slate-900 mt-1 flex items-center gap-1.5">
-                    {paymentStatus?.status === "PAID" ? (
+                    {isWaitingWeighing ? (
+                      <span className="text-amber-700 font-bold">
+                        Menunggu Penimbangan
+                      </span>
+                    ) : isOrderPaid ? (
                       <span className="text-emerald-700 font-bold">
                         Terverifikasi Lunas
                       </span>
@@ -922,7 +962,7 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                     </div>
                   </div>
 
-                  {paymentStatus.status !== "PAID" && (
+                  {!isOrderPaid && (
                     <Button
                       type="button"
                       onClick={handleConfirmPayment}
@@ -938,13 +978,43 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                     </Button>
                   )}
                 </div>
+              ) : isWaitingWeighing ? (
+                <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                    <Scale size={18} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-amber-950">
+                      Menunggu Penimbangan Berat Cucian
+                    </div>
+                    <p className="text-[11px] text-amber-700 mt-0.5">
+                      Pesanan kiloan ini belum ditimbang. Masukkan berat riil cucian pada form penimbangan di atas untuk mengkalkulasi total tagihan.
+                    </p>
+                  </div>
+                </div>
+              ) : isOrderPaid ? (
+                <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-xl flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <CheckCircle size={18} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-emerald-950">
+                      Pembayaran Terverifikasi Lunas
+                    </div>
+                    <p className="text-[11px] text-emerald-700 mt-0.5">
+                      {paymentStatus?.paid_at
+                        ? `Pembayaran telah berhasil diverifikasi pada ${formatDate(paymentStatus.paid_at)}.`
+                        : "Pesanan ini telah lunas dan terverifikasi secara otomatis oleh sistem."}
+                    </p>
+                  </div>
+                </div>
               ) : (
                 <div className="p-4 bg-white border border-dashed border-slate-300 rounded-xl flex items-center justify-between">
                   <div className="text-xs text-slate-500">
                     Pelanggan belum mengunggah foto bukti pembayaran untuk
                     pesanan ini.
                   </div>
-                  {paymentStatus?.status !== "PAID" && (
+                  {!isOrderPaid && (
                     <Button
                       type="button"
                       onClick={handleConfirmPayment}

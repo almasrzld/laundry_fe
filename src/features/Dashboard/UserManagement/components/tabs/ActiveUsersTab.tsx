@@ -16,6 +16,7 @@ import {
   Wallet,
   X,
   PlusCircle,
+  Star,
 } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
 import { useDebounce } from "use-debounce";
@@ -350,8 +351,9 @@ export const ActiveUsersTab: React.FC = () => {
           return (
             <div className="font-bold text-slate-900">
               {formatRupiah(u.laundry_pay_balance || 0)}
-              <span className="block text-[10px] text-amber-600 font-semibold">
-                ★ {u.reward_points || 0} Poin
+              <span className="flex items-center text-[10px] text-amber-600 font-semibold mt-0.5">
+                <Star size={10} className="mr-1 fill-amber-400 text-amber-600 shrink-0" />
+                <span>{u.reward_points || 0} Poin</span>
               </span>
             </div>
           );

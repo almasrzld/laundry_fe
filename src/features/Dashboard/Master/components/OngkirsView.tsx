@@ -5,7 +5,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Search, Edit3, Trash2, Save, Loader2 } from "lucide-react";
+import { Search, Edit3, Trash2, Save, Loader2, AlertTriangle } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
 import { useDebounce } from "use-debounce";
 import { OngkirItem } from "@/types";
@@ -959,15 +959,17 @@ export const OngkirsView: React.FC = () => {
                         !isNaN(watchedFreeRadius) &&
                         !isNaN(watchedBaseRadius) &&
                         watchedBaseRadius > 0 ? (
-                          <div className="text-amber-700 bg-amber-50 border border-amber-200 rounded-md py-2 px-3 inline-block font-medium">
-                            ⚠️ Radius gratis ({watchedFreeRadius} {unitSymbol}) tidak boleh lebih besar atau sama dengan radius dasar ({watchedBaseRadius} {unitSymbol}).
+                          <div className="text-amber-700 bg-amber-50 border border-amber-200 rounded-md py-2 px-3 inline-flex items-center gap-1.5 font-medium">
+                            <AlertTriangle size={14} className="shrink-0 text-amber-600" />
+                            <span>Radius gratis ({watchedFreeRadius} {unitSymbol}) tidak boleh lebih besar atau sama dengan radius dasar ({watchedBaseRadius} {unitSymbol}).</span>
                           </div>
                         ) : watchedMaxRadius <= watchedBaseRadius &&
                           !isNaN(watchedMaxRadius) &&
                           !isNaN(watchedBaseRadius) &&
                           watchedBaseRadius > 0 ? (
-                          <div className="text-amber-700 bg-amber-50 border border-amber-200 rounded-md py-2 px-3 inline-block font-medium">
-                            ⚠️ Maksimal jangkauan ({watchedMaxRadius} {unitSymbol}) harus lebih besar dari radius dasar ({watchedBaseRadius} {unitSymbol}).
+                          <div className="text-amber-700 bg-amber-50 border border-amber-200 rounded-md py-2 px-3 inline-flex items-center gap-1.5 font-medium">
+                            <AlertTriangle size={14} className="shrink-0 text-amber-600" />
+                            <span>Maksimal jangkauan ({watchedMaxRadius} {unitSymbol}) harus lebih besar dari radius dasar ({watchedBaseRadius} {unitSymbol}).</span>
                           </div>
                         ) : (
                           <span className="text-slate-400 italic">

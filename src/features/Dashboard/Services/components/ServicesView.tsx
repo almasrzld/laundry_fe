@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Plus, Edit3, Trash2, Search, Filter, Eye } from "lucide-react";
+import { Plus, Edit3, Trash2, Search, Filter, Eye, Star } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
 import { ServiceItem } from "@/types";
 import { formatRupiah } from "@/lib/utils";
@@ -94,7 +94,10 @@ export const ServicesView: React.FC = () => {
             <div className="flex items-center gap-1.5 flex-wrap">
               <Badge variant="primary">{item.category}</Badge>
               {item.is_popular ? (
-                <Badge variant="warning">★ Populer</Badge>
+                <Badge variant="warning">
+                  <Star size={11} className="inline mr-1 fill-amber-400 text-amber-600" />
+                  Populer
+                </Badge>
               ) : null}
             </div>
           );
