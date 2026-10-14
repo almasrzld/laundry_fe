@@ -55,13 +55,15 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Check if current role has permission for this page (Strict Mode)
   const hasRouteAccess = useMemo(() => {
-    // 1. Route umum yang selalu dapat diakses oleh semua user yang sudah login (Dashboard & Profile Akun)
+    // 1. Route umum yang selalu dapat diakses oleh semua user yang sudah login (Dashboard, Profile Akun, & Notifikasi)
     if (
       !pathname ||
       pathname === '/' ||
       pathname === '/dashboard' ||
       pathname === '/profile' ||
-      pathname.startsWith('/profile/')
+      pathname.startsWith('/profile/') ||
+      pathname === '/notifications' ||
+      pathname.startsWith('/notifications/')
     ) {
       return true;
     }

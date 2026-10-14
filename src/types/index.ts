@@ -152,14 +152,27 @@ export interface ServiceItem {
   badge_color_hex: number;
 }
 
+export type PromoCategory = 'Event' | 'Reward Point' | string;
+export type PromoBenefitType = 'Potongan Harga' | 'Bebas Ongkir' | 'Potongan Ongkir' | string;
+export type PromoDiscountType = 'Nominal' | 'Persen' | string;
+
 export interface Promo {
   id: string;
+  id_promos?: number | string;
   title: string;
   subtitle: string;
   code: string;
+  category: PromoCategory;
+  benefit_type: PromoBenefitType;
+  discount_type: PromoDiscountType;
   discount_amount: number;
+  max_discount?: number | null;
   min_order_amount: number;
+  points_required?: number;
+  start_date: string;
+  end_date: string;
   icon_code: string;
+  color_hex?: number;
   is_active: boolean | number;
   created_at?: string;
   updated_at?: string;
@@ -182,8 +195,9 @@ export interface IconItem {
 
 export interface UnitItem {
   id: string;
-  name: string;
-  code: string;
+  id_units?: number | string;
+  name_unit: string;
+  code_unit: string;
   symbol?: string | null;
   description?: string | null;
   is_active: boolean | number;
@@ -259,6 +273,99 @@ export interface OrderStatusItem {
   created_at?: string;
   updated_at?: string;
 }
+
+export interface OutletItem {
+  id: string;
+  id_outlets?: number | string;
+  name_outlet: string;
+  address: string;
+  latitude: number | string;
+  longitude: number | string;
+  phone?: string | null;
+  is_used?: boolean;
+  used_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface OngkirAddressOption {
+  id: string;
+  label: string;
+  full_address: string;
+}
+
+export interface OngkirTierPreview {
+  tier_index: number;
+  code: string;
+  min_distance: number;
+  max_distance: number;
+  price: number;
+  label: string;
+  is_free: boolean;
+  unit_symbol?: string;
+}
+
+export interface CalculateOngkirResult {
+  distance?: number;
+  distance_km: number;
+  price_ongkir: number;
+  is_free: boolean;
+  is_deliverable: boolean;
+  message: string;
+  tier_label: string;
+  unit?: {
+    id: string;
+    name_unit: string;
+    code_unit: string;
+    symbol: string;
+  } | null;
+  outlet: {
+    id: string;
+    name_outlet: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+  } | null;
+  breakdown: {
+    free_radius: number;
+    base_radius: number;
+    base_price: number;
+    step_radius: number;
+    step_price: number;
+    max_radius: number;
+    excess_distance?: number;
+    additional_steps?: number;
+  };
+}
+
+export interface OngkirItem {
+  id: string;
+  id_ongkirs?: number | string;
+  outlets_id: number | string;
+  units_id: number | string;
+  name_ongkir: string;
+  code_ongkir: string;
+  free_radius: number;
+  base_radius: number;
+  base_price: number;
+  step_radius: number;
+  step_price: number;
+  max_radius: number;
+  // Attached relations
+  outlet_id?: string;
+  outlet_name?: string;
+  outlet_address?: string;
+  outlet_latitude?: number;
+  outlet_longitude?: number;
+  outlet_phone?: string;
+  unit_id?: string;
+  unit_name?: string;
+  unit_code?: string;
+  unit_symbol?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 
 
 

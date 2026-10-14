@@ -22,6 +22,12 @@ import {
   MessageCircle,
   Star,
   Crown,
+  CreditCard,
+  CheckCircle,
+  Maximize2,
+  FileCheck,
+  Check,
+  Scale,
 } from "lucide-react";
 import { formatRupiah, formatDate, cn, stripCountryCode } from "@/lib/utils";
 import { Badge } from "@/components/Badge";
@@ -30,9 +36,12 @@ import { ConfirmDialog, ConfirmVariant } from "@/components/ui/confirm-dialog";
 import {
   useOrderByIdQuery,
   useUpdateOrderMutation,
+  usePaymentStatusQuery,
+  useConfirmPaymentMutation,
 } from "@/hooks/useOrderQuery";
 import { useOrderStatusesQuery } from "@/hooks/useMasterQuery";
 import { useActiveUsersQuery } from "@/hooks/useUserManagementQuery";
+import { appConfig } from "@/config/app.config";
 import {
   Select,
   SelectTrigger,
@@ -59,10 +68,15 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
   const isEdit = rawAction === "edit";
 
   const { data: order, isLoading, error } = useOrderByIdQuery(effectiveOrderId);
+  const { data: paymentStatus, isLoading: isLoadingPayment } =
+    usePaymentStatusQuery(effectiveOrderId);
   const { data: masterStatuses = [] } = useOrderStatusesQuery();
   const { data: activeUsers = [], isLoading: isLoadingUsers } =
     useActiveUsersQuery();
   const updateOrderMutation = useUpdateOrderMutation();
+  const confirmPaymentMutation = useConfirmPaymentMutation();
+
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
   // Active master statuses sorted by step_order ASC
   const activeStatuses = useMemo(() => {
@@ -95,6 +109,42 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
   const [courierPhone, setCourierPhone] = useState<string>("");
   const [selectedCourierUserId, setSelectedCourierUserId] =
     useState<string>("");
+  const [actualWeight, setActualWeight] = useState<string>("");
+
+  const isKiloan = useMemo(() => {
+    if (!order) return false;
+    return (
+      (order.unit || "").toLowerCase() === "kg" ||
+      (order.service_type || "").toLowerCase().includes("kilo")
+    );
+  }, [order]);
+
+  const isWaitingWeighing = useMemo(() => {
+    return isKiloan && Number(order?.quantity || 0) <= 0;
+  }, [isKiloan, order]);
+
+  const isOrderPaid = useMemo(() => {
+    if (isWaitingWeighing) return false;
+    if (paymentStatus?.status === "PAID") return true;
+    const notesLower = (order?.notes || "").toLowerCase();
+    return (
+      !isKiloan &&
+      (notesLower.includes("[lunas via") ||
+        notesLower.includes("[lunas]") ||
+        notesLower.includes("(diverifikasi admin)") ||
+        notesLower.includes("lunas (voucher & poin)"))
+    );
+  }, [isWaitingWeighing, paymentStatus, order, isKiloan]);
+
+  const handleConfirmPayment = async () => {
+    if (!effectiveOrderId) return;
+    try {
+      await confirmPaymentMutation.mutateAsync(effectiveOrderId);
+      toast.success("Pembayaran berhasil diverifikasi & dikonfirmasi Lunas!");
+    } catch (err: any) {
+      toast.error(err.message || "Gagal mengonfirmasi pembayaran.");
+    }
+  };
 
   useEffect(() => {
     if (order) {
@@ -102,6 +152,9 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
         setSelectedStatusId(String(order.status_id || order.order_statuses_id));
       }
       setSelectedStatusName(order.status || "");
+      setActualWeight(
+        order.quantity && Number(order.quantity) > 0 ? String(order.quantity) : "",
+      );
       const orderCourierName = (order.courier_name || "").trim();
       const orderCourierPhone = (order.courier_phone || "").trim();
       setCourierName(orderCourierName);
@@ -292,6 +345,11 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
   const handleExecuteSave = async () => {
     if (!selectedStatusName && !selectedStatusId) return;
     try {
+      const isKiloan =
+        (order?.unit || "").toLowerCase() === "kg" ||
+        (order?.service_type || "").toLowerCase().includes("kilo");
+      const parsedWeight = parseFloat(actualWeight);
+
       await updateOrderMutation.mutateAsync({
         orderId: effectiveOrderId || order?.id || "",
         orderData: {
@@ -299,6 +357,9 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
           order_statuses_id: selectedStatusId || undefined,
           courier_name: courierName.trim(),
           courier_phone: courierPhone.trim(),
+          ...(isKiloan && !isNaN(parsedWeight) && parsedWeight > 0
+            ? { quantity: parsedWeight }
+            : {}),
         },
       });
 
@@ -317,6 +378,29 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
     e.preventDefault();
     if (!selectedStatusName && !selectedStatusId) {
       toast.error("Pilih status pengerjaan pesanan");
+      return;
+    }
+
+    const isKiloan =
+      (order?.unit || "").toLowerCase() === "kg" ||
+      (order?.service_type || "").toLowerCase().includes("kilo");
+    const parsedWeight = parseFloat(actualWeight);
+
+    // Jika status yang dipilih adalah tahap Siap Diantar / Selesai dan kiloan belum ditimbang:
+    const statusRequiresWeight =
+      selectedStatusName.toLowerCase().includes("siap") ||
+      selectedStatusName.toLowerCase().includes("selesai") ||
+      selectedStatusName.toLowerCase().includes("packing") ||
+      selectedStatusName.toLowerCase().includes("antar");
+
+    if (
+      isKiloan &&
+      statusRequiresWeight &&
+      (isNaN(parsedWeight) || parsedWeight <= 0)
+    ) {
+      toast.error(
+        "Masukkan berat aktual hasil timbangan (kg) sebelum mengubah status ke tahap siap antar atau selesai.",
+      );
       return;
     }
 
@@ -469,7 +553,9 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                   Jumlah / Satuan
                 </span>
                 <p className="font-bold text-sky-800 mt-1 text-sm">
-                  {order.quantity} {order.unit}
+                  {Number(order.quantity) > 0
+                    ? `${order.quantity} ${order.unit}`
+                    : ((order.unit || "").toLowerCase() === "kg" ? "Menunggu Timbang" : `${order.quantity} ${order.unit}`)}
                 </p>
                 <p className="text-[11px] text-slate-500 font-mono">
                   @{formatRupiah(order.price_per_unit)}/{order.unit}
@@ -481,7 +567,9 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                   Total Biaya
                 </span>
                 <p className="font-extrabold text-sky-700 mt-1 text-sm">
-                  {formatRupiah(grandTotal)}
+                  {Number(order.quantity) > 0
+                    ? formatRupiah(grandTotal)
+                    : ((order.unit || "").toLowerCase() === "kg" ? "Menunggu Timbang" : formatRupiah(grandTotal))}
                 </p>
                 <p className="text-[11px] text-emerald-600 font-medium">
                   Ongkir: {formatRupiah(order.delivery_fee)}
@@ -508,6 +596,105 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                 </p>
               </div>
             </div>
+
+            {/* Section Penimbangan Berat Cucian (Khusus Layanan Kg / Kiloan) */}
+            {((order.unit || "").toLowerCase() === "kg" || (order.service_type || "").toLowerCase().includes("kilo")) && (
+              <div className="mt-4 bg-sky-50/40 border border-sky-200 rounded-2xl p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-sky-100 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center shrink-0 border border-sky-200">
+                      <Scale size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">
+                        Penimbangan Berat Cucian (Layanan Kiloan)
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Input berat riil setelah cucian selesai dipacking untuk menetapkan total tagihan pesanan.
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    {Number(order.quantity) > 0 ? (
+                      <Badge variant="success" className="text-xs">
+                        <CheckCircle size={12} className="mr-1 inline" />
+                        Sudah Ditimbang ({order.quantity} kg)
+                      </Badge>
+                    ) : (
+                      <Badge variant="warning" className="text-xs">
+                        Menunggu Penimbangan
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+
+                {isEdit ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-center">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Berat Aktual Cucian (kg)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.1"
+                          placeholder="Masukkan berat, contoh: 3.5"
+                          value={actualWeight}
+                          onChange={(e) => setActualWeight(e.target.value)}
+                          className="w-full pl-3 pr-12 py-2.5 bg-white border border-slate-300 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 rounded-xl text-xs font-bold text-slate-900 transition-all outline-hidden"
+                        />
+                        <span className="absolute right-3.5 top-2.5 text-xs font-bold text-slate-400">
+                          kg
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Gunakan tanda titik (.) untuk nilai desimal, misal 2.75 atau 3.5.
+                      </p>
+                    </div>
+
+                    <div className="p-3.5 bg-white border border-sky-200/80 rounded-xl space-y-1.5 text-xs">
+                      <div className="flex justify-between text-slate-600">
+                        <span>Tarif Layanan:</span>
+                        <span className="font-semibold">{formatRupiah(order.price_per_unit)} / kg</span>
+                      </div>
+                      <div className="flex justify-between text-slate-600">
+                        <span>Subtotal ({parseFloat(actualWeight) || 0} kg):</span>
+                        <span className="font-bold text-slate-900">
+                          {formatRupiah((parseFloat(actualWeight) || 0) * order.price_per_unit)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-slate-600">
+                        <span>Ongkir & Diskon:</span>
+                        <span className="font-semibold text-emerald-600">
+                          +{formatRupiah(order.delivery_fee)} {order.discount > 0 ? `(-${formatRupiah(order.discount)})` : ""}
+                        </span>
+                      </div>
+                      <div className="border-t border-slate-200 pt-1.5 flex justify-between font-bold text-sky-800 text-xs">
+                        <span>Total Tagihan Baru:</span>
+                        <span>
+                          {formatRupiah(
+                            Math.max(
+                              0,
+                              (parseFloat(actualWeight) || 0) * order.price_per_unit +
+                                order.delivery_fee -
+                                order.discount,
+                            ),
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between text-xs">
+                    <span className="text-slate-600 font-medium">Hasil Timbangan Cucian:</span>
+                    <span className="font-bold text-slate-900">
+                      {Number(order.quantity) > 0 ? `${order.quantity} kg` : "Belum diinput petugas laundry"}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Section: Informasi Pemesan / Pelanggan */}
@@ -534,7 +721,8 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex items-center gap-3.5">
                     <div className="w-12 h-12 rounded-2xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold text-base border border-sky-200 shrink-0">
-                      {(order.customer_name || order.user_name)![0].toUpperCase()}
+                      {(order.customer_name ||
+                        order.user_name)![0].toUpperCase()}
                     </div>
                     <div>
                       <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -546,7 +734,10 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                       <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 mt-1">
                         {(order.customer_phone || order.user_phone) && (
                           <div className="flex items-center gap-1.5 font-medium text-sky-700">
-                            <Phone size={12} className="text-sky-600 shrink-0" />
+                            <Phone
+                              size={12}
+                              className="text-sky-600 shrink-0"
+                            />
                             <span>
                               {order.customer_phone || order.user_phone}
                             </span>
@@ -554,7 +745,10 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                         )}
                         {(order.customer_email || order.user_email) && (
                           <div className="flex items-center gap-1.5 text-slate-500">
-                            <Mail size={12} className="text-slate-400 shrink-0" />
+                            <Mail
+                              size={12}
+                              className="text-slate-400 shrink-0"
+                            />
                             <span>
                               {order.customer_email || order.user_email}
                             </span>
@@ -581,7 +775,8 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                 </div>
               ) : (
                 <div className="text-xs text-slate-400 italic">
-                  Data akun pelanggan tidak tercatat pada sistem untuk pesanan ini.
+                  Data akun pelanggan tidak tercatat pada sistem untuk pesanan
+                  ini.
                 </div>
               )}
 
@@ -634,6 +829,202 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
                     <div className="text-[10px] text-amber-700 mt-1">
                       Diulas pada {formatDate(order.rated_at)}
                     </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section: Status & Bukti Pembayaran (Manual Transfer / Proof) */}
+          <div className="space-y-3 pt-1">
+            <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <span>Informasi & Verifikasi Pembayaran</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Status pembayaran dan bukti transfer yang diunggah oleh
+                  pelanggan (Format WebP &le; 1MB):
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {isWaitingWeighing ? (
+                  <Badge variant="warning" className="text-xs">
+                    <Scale size={13} className="mr-1 inline" />
+                    Menunggu Penimbangan
+                  </Badge>
+                ) : isOrderPaid ? (
+                  <Badge variant="success" className="text-xs">
+                    <CheckCircle size={13} className="mr-1 inline" />
+                    Lunas
+                  </Badge>
+                ) : paymentStatus?.proof_image ? (
+                  <Badge variant="warning" className="text-xs">
+                    Menunggu Verifikasi Bukti
+                  </Badge>
+                ) : (
+                  <Badge variant="danger" className="text-xs">
+                    Belum Dibayar
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                <div className="p-3 bg-white rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block tracking-wider">
+                    Metode Pembayaran
+                  </span>
+                  <p className="text-xs font-bold text-slate-900 mt-1">
+                    {paymentStatus?.payment_method
+                      ? paymentStatus.payment_method.replace(/_/g, " ")
+                      : (order?.notes || "").toLowerCase().includes("qris")
+                        ? "QRIS"
+                        : (order?.notes || "").toLowerCase().includes("laundrypay")
+                          ? "Saldo LaundryPay"
+                          : (order?.notes || "").toLowerCase().includes("tunai") || (order?.notes || "").toLowerCase().includes("cod")
+                            ? "Tunai / COD"
+                            : "-"}
+                  </p>
+                </div>
+                <div className="p-3 bg-white rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block tracking-wider">
+                    Total Nominal Tagihan
+                  </span>
+                  <p className="text-xs font-bold text-sky-700 mt-1">
+                    {formatRupiah(
+                      order.price_per_unit * order.quantity +
+                        order.delivery_fee -
+                        order.discount,
+                    )}
+                  </p>
+                </div>
+                <div className="p-3 bg-white rounded-xl border border-slate-200">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase block tracking-wider">
+                    Status Verifikasi
+                  </span>
+                  <p className="text-xs font-bold text-slate-900 mt-1 flex items-center gap-1.5">
+                    {isWaitingWeighing ? (
+                      <span className="text-amber-700 font-bold">
+                        Menunggu Penimbangan
+                      </span>
+                    ) : isOrderPaid ? (
+                      <span className="text-emerald-700 font-bold">
+                        Terverifikasi Lunas
+                      </span>
+                    ) : paymentStatus?.proof_image ? (
+                      <span className="text-amber-700 font-bold">
+                        Menunggu Cek Admin
+                      </span>
+                    ) : (
+                      <span className="text-slate-500 font-medium">
+                        Belum Ada Bukti Bayar
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* Bukti Transfer Image & Actions */}
+              {paymentStatus?.proof_image ? (
+                <div className="p-4 bg-white border border-slate-200 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div
+                      onClick={() => setIsImageModalOpen(true)}
+                      className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 cursor-pointer group shrink-0"
+                    >
+                      <img
+                        src={`${appConfig.backendUrl}${paymentStatus.proof_image}`}
+                        alt="Bukti Transfer"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                        <Maximize2 size={16} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-900">
+                        Foto Bukti Transfer
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Gambar otomatis dikonversi ke WebP untuk performa
+                        ringan.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsImageModalOpen(true)}
+                        className="text-xs font-bold text-sky-600 hover:text-sky-700 hover:underline mt-1.5 flex items-center gap-1 cursor-pointer"
+                      >
+                        <Maximize2 size={13} />
+                        <span>Lihat Ukuran Penuh</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {!isOrderPaid && (
+                    <Button
+                      type="button"
+                      onClick={handleConfirmPayment}
+                      disabled={confirmPaymentMutation.isPending}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl px-4 py-2.5 shadow-sm flex items-center gap-2 cursor-pointer"
+                    >
+                      {confirmPaymentMutation.isPending ? (
+                        <Loader2 size={15} className="animate-spin" />
+                      ) : (
+                        <Check size={15} />
+                      )}
+                      <span>Konfirmasi Pembayaran Lunas</span>
+                    </Button>
+                  )}
+                </div>
+              ) : isWaitingWeighing ? (
+                <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                    <Scale size={18} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-amber-950">
+                      Menunggu Penimbangan Berat Cucian
+                    </div>
+                    <p className="text-[11px] text-amber-700 mt-0.5">
+                      Pesanan kiloan ini belum ditimbang. Masukkan berat riil cucian pada form penimbangan di atas untuk mengkalkulasi total tagihan.
+                    </p>
+                  </div>
+                </div>
+              ) : isOrderPaid ? (
+                <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-xl flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <CheckCircle size={18} />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-emerald-950">
+                      Pembayaran Terverifikasi Lunas
+                    </div>
+                    <p className="text-[11px] text-emerald-700 mt-0.5">
+                      {paymentStatus?.paid_at
+                        ? `Pembayaran telah berhasil diverifikasi pada ${formatDate(paymentStatus.paid_at)}.`
+                        : "Pesanan ini telah lunas dan terverifikasi secara otomatis oleh sistem."}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-white border border-dashed border-slate-300 rounded-xl flex items-center justify-between">
+                  <div className="text-xs text-slate-500">
+                    Pelanggan belum mengunggah foto bukti pembayaran untuk
+                    pesanan ini.
+                  </div>
+                  {!isOrderPaid && (
+                    <Button
+                      type="button"
+                      onClick={handleConfirmPayment}
+                      disabled={confirmPaymentMutation.isPending}
+                      variant="outline"
+                      className="border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-bold text-xs rounded-xl px-3.5 py-2 cursor-pointer"
+                    >
+                      <Check size={14} className="mr-1.5" />
+                      Konfirmasi Lunas Manual
+                    </Button>
                   )}
                 </div>
               )}
@@ -1044,6 +1435,52 @@ export const OrderFormSubmit: React.FC<OrderFormSubmitProps> = ({
             setConfirmDialog((prev) => ({ ...prev, isOpen: false }))
           }
         />
+      )}
+
+      {/* Modal Preview Bukti Transfer (WebP Fullscreen Preview) */}
+      {isImageModalOpen && paymentStatus?.proof_image && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setIsImageModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-lg w-full p-5 overflow-hidden shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                <FileCheck size={16} className="text-sky-600" />
+                <span>Bukti Pembayaran Pelanggan</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setIsImageModalOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+            <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-950/5 flex items-center justify-center max-h-[70vh]">
+              <img
+                src={`${appConfig.backendUrl}${paymentStatus.proof_image}`}
+                alt="Bukti Transfer Full"
+                className="w-full h-auto max-h-[65vh] object-contain rounded-lg"
+              />
+            </div>
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-[11px] text-slate-500 font-medium">
+                Format: WebP (Dikompres &le; 1MB)
+              </span>
+              <Button
+                type="button"
+                onClick={() => setIsImageModalOpen(false)}
+                className="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl px-4 py-2 cursor-pointer"
+              >
+                Tutup
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

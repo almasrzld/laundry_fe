@@ -28,8 +28,8 @@ import {
 } from "@/hooks/useMasterQuery";
 
 const unitSchema = z.object({
-  name: z.string().min(1, "Nama satuan wajib diisi"),
-  code: z.string().min(1, "Kode satuan wajib diisi"),
+  name_unit: z.string().min(1, "Nama satuan wajib diisi"),
+  code_unit: z.string().min(1, "Kode satuan wajib diisi"),
   symbol: z.string().optional(),
   description: z.string().optional(),
   is_active: z.boolean().default(true),
@@ -72,8 +72,8 @@ export const UnitsView: React.FC = () => {
   } = useForm<UnitFormData>({
     resolver: zodResolver(unitSchema) as any,
     defaultValues: {
-      name: "",
-      code: "",
+      name_unit: "",
+      code_unit: "",
       symbol: "",
       description: "",
       is_active: true,
@@ -83,8 +83,8 @@ export const UnitsView: React.FC = () => {
   const handleEditUnit = (unit: UnitItem) => {
     setEditingUnit(unit);
     reset({
-      name: unit.name,
-      code: unit.code,
+      name_unit: unit.name_unit,
+      code_unit: unit.code_unit,
       symbol: unit.symbol || "",
       description: unit.description || "",
       is_active: Boolean(unit.is_active),
@@ -95,8 +95,8 @@ export const UnitsView: React.FC = () => {
   const handleCancelEdit = () => {
     setEditingUnit(null);
     reset({
-      name: "",
-      code: "",
+      name_unit: "",
+      code_unit: "",
       symbol: "",
       description: "",
       is_active: true,
@@ -105,11 +105,13 @@ export const UnitsView: React.FC = () => {
 
   const onSubmit = async (data: UnitFormData) => {
     try {
+      const trimmedName = data.name_unit.trim();
+      const trimmedCode = data.code_unit.trim();
       await saveUnitMutation.mutateAsync({
         data: {
-          name: data.name.trim(),
-          code: data.code.trim(),
-          symbol: data.symbol?.trim() || data.code.trim(),
+          name_unit: trimmedName,
+          code_unit: trimmedCode,
+          symbol: data.symbol?.trim() || null,
           description: data.description?.trim() || null,
           is_active: Boolean(data.is_active),
         },
@@ -118,8 +120,8 @@ export const UnitsView: React.FC = () => {
 
       toast.success(
         editingUnit
-          ? `Satuan "${data.name}" berhasil diperbarui!`
-          : `Satuan "${data.name}" berhasil ditambahkan!`,
+          ? `Satuan "${trimmedName}" berhasil diperbarui!`
+          : `Satuan "${trimmedName}" berhasil ditambahkan!`,
       );
       handleCancelEdit();
     } catch (err: any) {
@@ -131,13 +133,13 @@ export const UnitsView: React.FC = () => {
     setConfirmDialog({
       isOpen: true,
       title: "Konfirmasi Hapus Satuan",
-      description: `Apakah Anda yakin ingin menghapus master satuan "${unit.name}" (${unit.code})?`,
+      description: `Apakah Anda yakin ingin menghapus master satuan "${unit.name_unit}" (${unit.code_unit})?`,
       variant: "delete",
       confirmText: "Ya, Hapus Satuan",
       onConfirm: async () => {
         try {
           await deleteUnitMutation.mutateAsync(unit.id);
-          toast.success(`Satuan "${unit.name}" berhasil dihapus.`);
+          toast.success(`Satuan "${unit.name_unit}" berhasil dihapus.`);
         } catch (err: any) {
           toast.error(err.message || "Gagal menghapus satuan");
         } finally {
@@ -151,12 +153,17 @@ export const UnitsView: React.FC = () => {
   const filteredUnits = useMemo(() => {
     return units.filter((u) => {
       const q = debouncedSearch.trim().toLowerCase();
+      const uName = (u.name_unit || "").toLowerCase();
+      const uCode = (u.code_unit || "").toLowerCase();
+      const uSymbol = (u.symbol || "").toLowerCase();
+      const uDesc = (u.description || "").toLowerCase();
+
       const matchSearch =
         !q ||
-        u.name.toLowerCase().includes(q) ||
-        u.code.toLowerCase().includes(q) ||
-        (u.symbol && u.symbol.toLowerCase().includes(q)) ||
-        (u.description && u.description.toLowerCase().includes(q));
+        uName.includes(q) ||
+        uCode.includes(q) ||
+        uSymbol.includes(q) ||
+        uDesc.includes(q);
 
       const matchStatus =
         statusFilter === "all" ||
@@ -170,13 +177,13 @@ export const UnitsView: React.FC = () => {
   const columns = useMemo<ColumnDef<UnitItem>[]>(
     () => [
       {
-        accessorKey: "name",
+        accessorKey: "name_unit",
         header: "Nama Satuan Ukur",
         cell: ({ row }) => (
           <div className="flex items-center gap-3">
             <div>
               <div className="font-bold text-slate-900">
-                {row.original.name}
+                {row.original.name_unit}
               </div>
               <div className="text-[11px] text-slate-500 line-clamp-1">
                 {row.original.description || "-"}
@@ -186,11 +193,11 @@ export const UnitsView: React.FC = () => {
         ),
       },
       {
-        accessorKey: "code",
+        accessorKey: "code_unit",
         header: "Kode & Simbol",
         cell: ({ row }) => (
           <div className="flex items-center gap-1.5">
-            <Badge variant="primary">{row.original.code}</Badge>
+            <Badge variant="primary">{row.original.code_unit}</Badge>
             {row.original.symbol && (
               <span className="text-xs font-mono font-bold text-slate-600">
                 ({row.original.symbol})
@@ -266,9 +273,11 @@ export const UnitsView: React.FC = () => {
               {editingUnit ? (
                 <span>
                   Mode Edit:{" "}
-                  <strong className="text-blue-600">{editingUnit.name}</strong>{" "}
+                  <strong className="text-blue-600">
+                    {editingUnit.name_unit}
+                  </strong>{" "}
                   <span className="text-slate-500 font-mono text-[11px]">
-                    ({editingUnit.code})
+                    ({editingUnit.code_unit})
                   </span>
                 </span>
               ) : (
@@ -295,18 +304,18 @@ export const UnitsView: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  {...register("name")}
+                  {...register("name_unit")}
                   placeholder="Nama Satuan"
                   className={cn(
                     "w-full h-[34px] bg-white border rounded-md px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none transition-colors",
-                    errors.name
+                    errors.name_unit
                       ? "border-rose-400 focus:border-rose-500 bg-rose-50/30"
                       : "border-slate-300 focus:border-blue-500",
                   )}
                 />
-                {errors.name && (
+                {errors.name_unit && (
                   <p className="text-[10px] text-rose-500 font-medium mt-1">
-                    {errors.name.message}
+                    {errors.name_unit.message}
                   </p>
                 )}
               </div>
@@ -318,18 +327,18 @@ export const UnitsView: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  {...register("code")}
+                  {...register("code_unit")}
                   placeholder="Kode Satuan"
                   className={cn(
                     "w-full h-[34px] bg-white border rounded-md px-3 py-2 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none transition-colors font-mono",
-                    errors.code
+                    errors.code_unit
                       ? "border-rose-400 focus:border-rose-500 bg-rose-50/30"
                       : "border-slate-300 focus:border-blue-500",
                   )}
                 />
-                {errors.code && (
+                {errors.code_unit && (
                   <p className="text-[10px] text-rose-500 font-medium mt-1">
-                    {errors.code.message}
+                    {errors.code_unit.message}
                   </p>
                 )}
               </div>
@@ -370,7 +379,13 @@ export const UnitsView: React.FC = () => {
                   name="is_active"
                   render={({ field }) => (
                     <Select
-                      key={field.value !== undefined ? (field.value ? "1" : "0") : "empty"}
+                      key={
+                        field.value !== undefined
+                          ? field.value
+                            ? "1"
+                            : "0"
+                          : "empty"
+                      }
                       value={field.value ? "1" : "0"}
                       onValueChange={(val) => field.onChange(val === "1")}
                     >

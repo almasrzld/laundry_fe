@@ -1,20 +1,28 @@
 "use client";
 
 import React, { useState } from "react";
-import { Users, UserX, Key, Smartphone } from "lucide-react";
+import { Users, UserX, Key, Smartphone, Wallet } from "lucide-react";
 import { Tabs, TabItem } from "@/components/Tabs";
 import {
   useActiveUsersQuery,
   useInactiveUsersQuery,
   useSystemRolesQuery,
+  useTopupRequestsQuery,
 } from "@/hooks/useUserManagementQuery";
 import { ActiveUsersTab } from "./tabs/ActiveUsersTab";
 import { InactiveUsersTab } from "./tabs/InactiveUsersTab";
 import { RolesTab } from "./tabs/RolesTab";
 import { PermissionsTab } from "./tabs/PermissionsTab";
 import { MobilePermissionsTab } from "./tabs/MobilePermissionsTab";
+import { TopupRequestsTab } from "./tabs/TopupRequestsTab";
 
-export type UserManagementTab = "active" | "inactive" | "roles" | "permissions" | "mobile_permissions";
+export type UserManagementTab =
+  | "active"
+  | "topups"
+  | "inactive"
+  | "roles"
+  | "permissions"
+  | "mobile_permissions";
 
 export const UserManagementView: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<UserManagementTab>("active");
@@ -22,6 +30,11 @@ export const UserManagementView: React.FC = () => {
   const { data: activeUsers = [] } = useActiveUsersQuery();
   const { data: inactiveUsers = [] } = useInactiveUsersQuery();
   const { data: roles = [] } = useSystemRolesQuery();
+  const { data: topupRequests = [] } = useTopupRequestsQuery();
+
+  const pendingTopupsCount = React.useMemo(() => {
+    return topupRequests.filter((t) => t.status === "pending").length;
+  }, [topupRequests]);
 
   const tabs: TabItem<UserManagementTab>[] = [
     {
@@ -29,6 +42,12 @@ export const UserManagementView: React.FC = () => {
       label: "User Aktif",
       icon: <Users size={16} />,
       badge: activeUsers.length,
+    },
+    {
+      id: "topups",
+      label: "Pengajuan Top-Up",
+      icon: <Wallet size={16} />,
+      badge: pendingTopupsCount > 0 ? pendingTopupsCount : undefined,
     },
     {
       id: "inactive",
@@ -74,6 +93,7 @@ export const UserManagementView: React.FC = () => {
         <Tabs tabs={tabs} activeTab={currentTab} onChange={setCurrentTab} />
 
         {currentTab === "active" && <ActiveUsersTab />}
+        {currentTab === "topups" && <TopupRequestsTab />}
         {currentTab === "inactive" && <InactiveUsersTab />}
         {currentTab === "roles" && <RolesTab />}
         {currentTab === "permissions" && <PermissionsTab />}

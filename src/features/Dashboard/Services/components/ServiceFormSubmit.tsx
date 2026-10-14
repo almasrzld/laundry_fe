@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { ArrowLeft, Save, Search, ExternalLink, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Search, ExternalLink, Sparkles, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DynamicIcon } from "@/components/DynamicIcon";
@@ -151,14 +151,14 @@ export const ServiceFormSubmit: React.FC<ServiceFormSubmitProps> = ({
           (u) =>
             u.id === String(initialService.unit_id) ||
             u.id === String(initialService.units_id) ||
-            u.code.toLowerCase() === resolvedUnit.toLowerCase() ||
+            u.code_unit.toLowerCase() === resolvedUnit.toLowerCase() ||
             (u.symbol &&
               u.symbol.toLowerCase() === resolvedUnit.toLowerCase()) ||
-            u.name.toLowerCase() === resolvedUnit.toLowerCase(),
+            u.name_unit.toLowerCase() === resolvedUnit.toLowerCase(),
         );
         if (foundU) {
           resolvedUnitsId = foundU.id;
-          resolvedUnit = foundU.code;
+          resolvedUnit = foundU.code_unit;
         }
       }
 
@@ -444,9 +444,9 @@ export const ServiceFormSubmit: React.FC<ServiceFormSubmitProps> = ({
                       field.onChange(val);
                       const found = dbUnits.find(
                         (u) =>
-                          u.code.toLowerCase() === val.toLowerCase() ||
+                          u.code_unit.toLowerCase() === val.toLowerCase() ||
                           (u.symbol && u.symbol.toLowerCase() === val.toLowerCase()) ||
-                          u.name.toLowerCase() === val.toLowerCase() ||
+                          u.name_unit.toLowerCase() === val.toLowerCase() ||
                           u.id === val,
                       );
                       if (found) {
@@ -486,21 +486,21 @@ export const ServiceFormSubmit: React.FC<ServiceFormSubmitProps> = ({
                               (u) =>
                                 Boolean(u.is_active) ||
                                 (field.value &&
-                                  (u.code.toLowerCase() ===
+                                  (u.code_unit.toLowerCase() ===
                                     field.value.toLowerCase() ||
                                     u.symbol?.toLowerCase() ===
                                       field.value.toLowerCase())),
                             )
                             .map((u) => (
-                              <SelectItem key={u.id} value={u.code}>
-                                {u.name}{" "}
-                                {u.symbol ? `(${u.symbol})` : `(${u.code})`}
+                              <SelectItem key={u.id} value={u.code_unit}>
+                                {u.name_unit}{" "}
+                                {u.symbol ? `(${u.symbol})` : `(${u.code_unit})`}
                               </SelectItem>
                             ))}
                           {field.value &&
                             !dbUnits.some(
                               (u) =>
-                                u.code.toLowerCase() ===
+                                u.code_unit.toLowerCase() ===
                                 field.value.toLowerCase(),
                             ) && (
                               <SelectItem value={field.value}>
@@ -743,9 +743,10 @@ export const ServiceFormSubmit: React.FC<ServiceFormSubmitProps> = ({
                       <button
                         type="button"
                         onClick={() => setIconSearchQuery("")}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 flex items-center justify-center p-0.5"
+                        aria-label="Hapus pencarian"
                       >
-                        ✕
+                        <X size={14} />
                       </button>
                     )}
                   </div>

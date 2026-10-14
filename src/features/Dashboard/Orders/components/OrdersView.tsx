@@ -129,12 +129,26 @@ export const OrdersView: React.FC = () => {
         header: "Layanan & Berat",
         cell: ({ row }) => {
           const ord = row.original;
+          const isKiloan = (ord.unit || "").toLowerCase() === "kg" || (ord.service_type || "").toLowerCase().includes("kilo");
+          const isWaitingWeighing = isKiloan && Number(ord.quantity) <= 0;
+
           return (
             <div>
               <div className="font-bold text-slate-900">{ord.service_name}</div>
-              <div className="text-[11px] text-slate-500">
-                {ord.quantity} {ord.unit} • {formatRupiah(ord.price_per_unit)}/
-                {ord.unit}
+              <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                {isWaitingWeighing ? (
+                  <span className="inline-flex items-center text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+                    Menunggu Ditimbang
+                  </span>
+                ) : (
+                  <span>
+                    {ord.quantity} {ord.unit}
+                  </span>
+                )}
+                <span>•</span>
+                <span>
+                  {formatRupiah(ord.price_per_unit)}/{ord.unit}
+                </span>
               </div>
             </div>
           );
@@ -147,6 +161,17 @@ export const OrdersView: React.FC = () => {
           row.price_per_unit * row.quantity + row.delivery_fee - row.discount,
         cell: ({ row }) => {
           const ord = row.original;
+          const isKiloan = (ord.unit || "").toLowerCase() === "kg" || (ord.service_type || "").toLowerCase().includes("kilo");
+          const isWaitingWeighing = isKiloan && Number(ord.quantity) <= 0;
+
+          if (isWaitingWeighing) {
+            return (
+              <span className="text-xs font-semibold text-amber-700 italic">
+                Menunggu Timbang
+              </span>
+            );
+          }
+
           const total =
             ord.price_per_unit * ord.quantity + ord.delivery_fee - ord.discount;
           return (

@@ -16,6 +16,7 @@ import {
   RotateCw,
   Loader2,
   AlertTriangle,
+  Volume2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/useAuthStore";
@@ -48,6 +49,7 @@ export const LoginView: React.FC = () => {
 
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const [captchaCode, setCaptchaCode] = React.useState<string>("");
+  const captchaCodeRef = React.useRef<string>("");
 
   const {
     register,
@@ -86,12 +88,12 @@ export const LoginView: React.FC = () => {
   };
 
   const generateCaptcha = React.useCallback(() => {
+    // Kombinasi huruf besar, kecil, dan angka yang mudah dibaca (tanpa karakter ambigu 0/O/o, 1/l/I)
     const chars = "23456789abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
     let code = "";
     for (let i = 0; i < 5; i++) {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    setCaptchaCode(code);
     return code;
   }, []);
 
@@ -101,78 +103,114 @@ export const LoginView: React.FC = () => {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const width = canvas.width;
-    const height = canvas.height;
+    // Ambil lebar & tinggi kontainer aktual agar background memenuhi 100% tanpa celah samping
+    const rect = canvas.getBoundingClientRect();
+    const displayWidth =
+      rect.width > 0 ? rect.width : canvas.parentElement?.clientWidth || 240;
+    const displayHeight =
+      rect.height > 0 ? rect.height : canvas.parentElement?.clientHeight || 44;
 
-    // Background solid
-    ctx.fillStyle = "#f0f9ff";
-    ctx.fillRect(0, 0, width, height);
+    const dpr =
+      typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
 
-    // Random noise lines
-    for (let i = 0; i < 4; i++) {
-      ctx.strokeStyle = ["#38bdf8", "#0284c7", "#94a3b8", "#64748b"][i % 4];
-      ctx.lineWidth = 1.5;
+    canvas.width = Math.floor(displayWidth * dpr);
+    canvas.height = Math.floor(displayHeight * dpr);
+    ctx.scale(dpr, dpr);
+
+    // Background lembut dan bersih memenuhi 100% area canvas
+    const bgGradient = ctx.createLinearGradient(
+      0,
+      0,
+      displayWidth,
+      displayHeight,
+    );
+    bgGradient.addColorStop(0, "#f8fafc");
+    bgGradient.addColorStop(1, "#e0f2fe");
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, displayWidth, displayHeight);
+
+    // Garis grid latar belakang yang sangat halus dan rapi (tidak menutupi teks)
+    ctx.strokeStyle = "rgba(186, 230, 253, 0.6)";
+    ctx.lineWidth = 1;
+    for (let x = 15; x < displayWidth; x += 22) {
       ctx.beginPath();
-      ctx.moveTo(Math.random() * width, Math.random() * height);
-      ctx.bezierCurveTo(
-        Math.random() * width,
-        Math.random() * height,
-        Math.random() * width,
-        Math.random() * height,
-        Math.random() * width,
-        Math.random() * height,
-      );
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, displayHeight);
+      ctx.stroke();
+    }
+    for (let y = 10; y < displayHeight; y += 14) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(displayWidth, y);
       ctx.stroke();
     }
 
-    // Random noise dots
-    for (let i = 0; i < 25; i++) {
-      ctx.fillStyle = ["#0284c7", "#0369a1", "#94a3b8", "#0ea5e9"][i % 4];
-      ctx.beginPath();
-      ctx.arc(
-        Math.random() * width,
-        Math.random() * height,
-        Math.random() * 2,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-    }
-
-    // Draw characters with rotation and distinct colors
+    // Tulis karakter dengan jelas, tegak, kontras tinggi & terpisah
     const charList = code.split("");
-    const startX = 14;
-    const spacing = (width - 28) / charList.length;
+    const charWidth = displayWidth / charList.length;
+    const colors = ["#0f172a", "#0369a1", "#1e3a8a", "#0f766e", "#1e293b"];
 
     charList.forEach((char, idx) => {
       ctx.save();
-      const x = startX + idx * spacing + spacing / 2;
-      const y = height / 2 + 1;
+      const x = idx * charWidth + charWidth / 2;
+      const y = displayHeight / 2;
       ctx.translate(x, y);
-      const angle = (Math.random() - 0.5) * 0.4;
+
+      // Sedikit variasi sudut sangat minimal (-2 s.d +2 derajat) agar natural namun tetap tegak jelas
+      const angle = (idx % 2 === 0 ? 1 : -1) * 0.03;
       ctx.rotate(angle);
 
-      ctx.font = `bold ${Math.floor(20 + Math.random() * 4)}px 'Inter', system-ui, sans-serif`;
-      ctx.fillStyle = ["#0369a1", "#0284c7", "#0f172a", "#1e293b", "#075985"][
-        idx % 5
-      ];
+      // Font tebal, jelas, dan besar (mudah dibaca semua kalangan)
+      ctx.font = "bold 24px 'Inter', system-ui, -apple-system, sans-serif";
+      ctx.fillStyle = colors[idx % colors.length];
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
+
+      // Bayangan halus untuk keterbacaan ekstra
+      ctx.shadowColor = "rgba(0, 0, 0, 0.08)";
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 1;
+      ctx.shadowBlur = 1;
+
       ctx.fillText(char, 0, 0);
       ctx.restore();
     });
   }, []);
 
-  React.useEffect(() => {
+  const refreshCaptcha = React.useCallback(() => {
     const code = generateCaptcha();
-    drawCaptcha(code);
-  }, [generateCaptcha, drawCaptcha]);
-
-  const refreshCaptcha = () => {
-    const code = generateCaptcha();
+    setCaptchaCode(code);
+    captchaCodeRef.current = code;
     drawCaptcha(code);
     setValue("captcha", "");
-  };
+  }, [generateCaptcha, drawCaptcha, setValue]);
+
+  React.useEffect(() => {
+    refreshCaptcha();
+    const handleResize = () => {
+      if (captchaCodeRef.current) {
+        drawCaptcha(captchaCodeRef.current);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [refreshCaptcha, drawCaptcha]);
+
+  const speakCaptcha = React.useCallback(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      toast.info("Fitur suara tidak didukung oleh browser ini");
+      return;
+    }
+    if (!captchaCode) return;
+
+    window.speechSynthesis.cancel();
+    // Beri jeda koma antar huruf agar terdengar jelas dieja per karakter
+    const spokenText = captchaCode.split("").join(", ");
+    const utterance = new SpeechSynthesisUtterance(spokenText);
+    utterance.rate = 0.75; // Kecepatan nyaman untuk lansia
+    utterance.lang = "id-ID";
+    window.speechSynthesis.speak(utterance);
+  }, [captchaCode]);
 
   const onSubmit = async (data: LoginSchema) => {
     if (lockoutSecondsLeft > 0) {
@@ -182,7 +220,8 @@ export const LoginView: React.FC = () => {
       return;
     }
 
-    if (data.captcha.trim() !== captchaCode) {
+    // Validasi case-insensitive (huruf besar/kecil tetap cocok) demi kemudahan pengguna
+    if (data.captcha.trim().toUpperCase() !== captchaCode.toUpperCase()) {
       setError("captcha", {
         type: "manual",
         message: "Kode keamanan tidak sesuai",
@@ -406,25 +445,37 @@ export const LoginView: React.FC = () => {
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
               Kode Keamanan <span className="text-rose-500">*</span>
             </label>
+
             <div className="flex items-center gap-2 mb-2">
-              <div className="relative border border-sky-200 rounded-xl overflow-hidden bg-sky-50 shadow-inner flex-1 flex items-center justify-center h-10 select-none">
-                <canvas
-                  ref={canvasRef}
-                  width={180}
-                  height={40}
-                  className="w-full h-full object-cover"
-                />
+              <div className="relative border-2 border-sky-200/80 rounded-xl overflow-hidden bg-sky-50 shadow-inner flex-1 flex items-center justify-center h-11 select-none">
+                <canvas ref={canvasRef} className="w-full h-full block" />
               </div>
+
+              {/* Tombol Bantuan Suara (TTS) */}
+              <button
+                type="button"
+                disabled={lockoutSecondsLeft > 0}
+                onClick={speakCaptcha}
+                className="h-11 w-11 flex items-center justify-center bg-sky-50 hover:bg-sky-100 text-sky-700 rounded-xl border border-sky-200 transition-colors cursor-pointer shrink-0 disabled:opacity-40"
+                title="Dengarkan kode"
+                aria-label="Dengarkan kode"
+              >
+                <Volume2 size={17} />
+              </button>
+
+              {/* Tombol Ganti / Muat Ulang Kode */}
               <button
                 type="button"
                 disabled={lockoutSecondsLeft > 0}
                 onClick={refreshCaptcha}
-                className="h-10 w-10 flex items-center justify-center bg-slate-50 hover:bg-sky-50 hover:text-sky-600 text-slate-500 rounded-xl border border-slate-200 transition-colors cursor-pointer shrink-0 disabled:opacity-40"
-                title="Ganti kode captcha"
+                className="h-11 w-11 flex items-center justify-center bg-slate-50 hover:bg-sky-50 hover:text-sky-600 text-slate-600 rounded-xl border border-slate-200 transition-colors cursor-pointer shrink-0 disabled:opacity-40"
+                title="Ganti kode"
+                aria-label="Ganti kode"
               >
-                <RotateCw size={15} />
+                <RotateCw size={16} />
               </button>
             </div>
+
             <div className="relative">
               <ShieldCheck
                 size={16}
@@ -434,11 +485,11 @@ export const LoginView: React.FC = () => {
                 type="text"
                 disabled={lockoutSecondsLeft > 0}
                 {...register("captcha")}
-                placeholder="Masukkan 5 karakter kode di atas"
-                maxLength={6}
+                placeholder="Ketik 5 karakter kode di atas"
+                maxLength={5}
                 autoComplete="off"
                 className={cn(
-                  "w-full pl-10 pr-4 py-2.5 bg-slate-50 border rounded-xl text-xs font-semibold tracking-wider text-slate-900 focus:outline-none transition-colors",
+                  "w-full pl-10 pr-4 py-2.5 bg-slate-50 border rounded-xl text-xs font-semibold tracking-wider text-slate-900 placeholder:font-normal placeholder:tracking-normal focus:outline-none transition-colors",
                   errors.captcha
                     ? "border-rose-400 bg-rose-50/20"
                     : "border-slate-200 focus:border-sky-600 focus:bg-white",
@@ -481,7 +532,6 @@ export const LoginView: React.FC = () => {
             ) : (
               <>
                 <span>Masuk ke Sistem</span>
-                <ArrowRight size={16} />
               </>
             )}
           </Button>

@@ -14,6 +14,7 @@ import {
   Loader2,
   CheckCircle2,
   HelpCircle,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -171,9 +172,10 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
             </div>
             <button
               onClick={handleResetAll}
-              className="text-white/80 hover:text-white text-lg font-bold px-2 py-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer flex items-center justify-center"
+              aria-label="Tutup modal"
             >
-              ✕
+              <X size={20} />
             </button>
           </div>
 

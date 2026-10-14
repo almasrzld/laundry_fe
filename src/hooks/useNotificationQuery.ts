@@ -29,6 +29,77 @@ export const NOTIFICATION_QUERY_KEYS = {
   unreadCount: ['notifications', 'unread-count'] as const,
 };
 
+// Global Singleton SSE Connection Manager to prevent socket exhaustion
+let globalEventSource: EventSource | null = null;
+let globalCurrentToken: string | null = null;
+let globalReconnectTimeout: any = null;
+const globalListeners = new Set<() => void>();
+
+function getOrInitEventSource(token: string) {
+  if (typeof window === 'undefined') return;
+  if (!token) {
+    closeGlobalEventSource();
+    return;
+  }
+
+  if (globalEventSource && globalCurrentToken === token) {
+    return;
+  }
+
+  closeGlobalEventSource();
+  globalCurrentToken = token;
+
+  const connect = () => {
+    try {
+      const streamUrl = `${getApiBaseUrl()}/notifications/stream?token=${encodeURIComponent(token)}`;
+      globalEventSource = new EventSource(streamUrl);
+
+      globalEventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'notification_update') {
+            globalListeners.forEach((fn) => fn());
+          }
+        } catch (_) {}
+      };
+
+      globalEventSource.onerror = () => {
+        if (globalEventSource) {
+          globalEventSource.close();
+          globalEventSource = null;
+        }
+        if (globalReconnectTimeout) clearTimeout(globalReconnectTimeout);
+        globalReconnectTimeout = setTimeout(() => {
+          if (globalListeners.size > 0 && globalCurrentToken) {
+            connect();
+          }
+        }, 10000);
+      };
+    } catch (_) {
+      if (globalReconnectTimeout) clearTimeout(globalReconnectTimeout);
+      globalReconnectTimeout = setTimeout(() => {
+        if (globalListeners.size > 0 && globalCurrentToken) {
+          connect();
+        }
+      }, 10000);
+    }
+  };
+
+  connect();
+}
+
+function closeGlobalEventSource() {
+  if (globalReconnectTimeout) {
+    clearTimeout(globalReconnectTimeout);
+    globalReconnectTimeout = null;
+  }
+  if (globalEventSource) {
+    globalEventSource.close();
+    globalEventSource = null;
+  }
+  globalCurrentToken = null;
+}
+
 // Hook Real-Time SSE Listener untuk sinkronisasi notifikasi instan antar-perangkat/tab
 export function useNotificationRealtimeSync() {
   const queryClient = useQueryClient();
@@ -37,46 +108,23 @@ export function useNotificationRealtimeSync() {
     if (typeof window === 'undefined') return;
 
     const token = getCookie(TOKEN_COOKIE);
-    if (!token) return;
+    if (!token) {
+      closeGlobalEventSource();
+      return;
+    }
 
-    let eventSource: EventSource | null = null;
-    let reconnectTimeout: any = null;
-
-    const connectSSE = () => {
-      try {
-        const streamUrl = `${getApiBaseUrl()}/notifications/stream?token=${encodeURIComponent(token)}`;
-        eventSource = new EventSource(streamUrl);
-
-        eventSource.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.type === 'notification_update') {
-              // Notifikasi baru atau pembaruan dibaca diterima real-time
-              queryClient.invalidateQueries({ queryKey: NOTIFICATION_QUERY_KEYS.all });
-              queryClient.invalidateQueries({ queryKey: NOTIFICATION_QUERY_KEYS.unreadCount });
-            }
-          } catch (_) {}
-        };
-
-        eventSource.onerror = () => {
-          if (eventSource) {
-            eventSource.close();
-            eventSource = null;
-          }
-          // Reconnect otomatis setelah 5 detik jika terputus
-          reconnectTimeout = setTimeout(connectSSE, 5000);
-        };
-      } catch (err) {
-        reconnectTimeout = setTimeout(connectSSE, 5000);
-      }
+    const onUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_QUERY_KEYS.all });
+      queryClient.invalidateQueries({ queryKey: NOTIFICATION_QUERY_KEYS.unreadCount });
     };
 
-    connectSSE();
+    globalListeners.add(onUpdate);
+    getOrInitEventSource(token);
 
     return () => {
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      if (eventSource) {
-        eventSource.close();
+      globalListeners.delete(onUpdate);
+      if (globalListeners.size === 0) {
+        closeGlobalEventSource();
       }
     };
   }, [queryClient]);
@@ -92,7 +140,7 @@ export function useNotificationsQuery(limit = 30) {
       const data = await apiClient.get<any, NotificationItem[]>(`/notifications?limit=${limit}`);
       return Array.isArray(data) ? data : [];
     },
-    refetchInterval: 5000, // Sinkronisasi otomatis setiap 5 detik
+    refetchInterval: 30000,
     refetchOnWindowFocus: true,
   });
 }
@@ -107,7 +155,7 @@ export function useUnreadNotificationCountQuery() {
       const data = await apiClient.get<any, { unread_count: number }>('/notifications/unread-count');
       return data || { unread_count: 0 };
     },
-    refetchInterval: 5000,
+    refetchInterval: 30000,
     refetchOnWindowFocus: true,
   });
 }

@@ -271,3 +271,106 @@ export function useDeletePermissionMutation() {
   });
 }
 
+// 14. Mutation untuk Top-Up Saldo Pengguna (LaundryPay)
+export function useTopupUserBalanceMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      amount,
+      notes,
+      referenceNo,
+    }: {
+      userId: string;
+      amount: number;
+      notes?: string;
+      referenceNo?: string;
+    }) => {
+      return await apiClient.post(`/system/users/${encodeURIComponent(userId)}/topup`, {
+        amount,
+        notes,
+        reference_no: referenceNo,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: USER_MANAGEMENT_QUERY_KEYS.activeUsers });
+      queryClient.invalidateQueries({ queryKey: USER_MANAGEMENT_QUERY_KEYS.inactiveUsers });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: ['couriers'] });
+      queryClient.invalidateQueries({ queryKey: ['topup-requests'] });
+    },
+  });
+}
+
+export interface TopupRequest {
+  id: string;
+  id_topup_requests: number;
+  users_id: number;
+  user_id: string;
+  user_name: string;
+  user_phone: string;
+  user_email: string;
+  role_code: string;
+  role_name?: string;
+  laundry_pay_balance: number;
+  amount: number;
+  payment_method: string;
+  notes?: string;
+  status: 'pending' | 'completed' | 'rejected';
+  admin_notes?: string;
+  proof_image?: string;
+  processed_by?: number;
+  processor_name?: string;
+  processed_at?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+// 15. Hook untuk mengambil daftar permintaan Top-Up Saldo
+export function useTopupRequestsQuery(status?: string, search?: string) {
+  return useQuery<TopupRequest[]>({
+    queryKey: ['topup-requests', status, search],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (status && status !== 'all') params.append('status', status);
+      if (search && search.trim()) params.append('search', search.trim());
+      const res = await apiClient.get<any, TopupRequest[]>(
+        `/system/topups?${params.toString()}`
+      );
+      return res;
+    },
+    staleTime: 1000 * 10,
+  });
+}
+
+// 16. Mutation untuk Menyetujui / Menolak Pengajuan Top-Up Saldo
+export function useUpdateTopupStatusMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      status,
+      adminNotes,
+    }: {
+      id: string;
+      status: 'completed' | 'rejected';
+      adminNotes?: string;
+    }) => {
+      return await apiClient.put(`/system/topups/${encodeURIComponent(id)}/status`, {
+        status,
+        admin_notes: adminNotes,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['topup-requests'] });
+      queryClient.invalidateQueries({ queryKey: USER_MANAGEMENT_QUERY_KEYS.activeUsers });
+      queryClient.invalidateQueries({ queryKey: USER_MANAGEMENT_QUERY_KEYS.inactiveUsers });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: ['couriers'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+}
+
